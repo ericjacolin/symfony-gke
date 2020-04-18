@@ -220,7 +220,7 @@ including the correct `.env` file.
 
 The folder structure is as follows:
 
-[cols="1,2,2", options="header"]
+[cols="2,3,3", options="header"]
 |===
 |Folder
 |Contents
