@@ -1,0 +1,45 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: {{ BRANCH }}-{{ PROJECT }}-mailer-realtime
+  labels:
+    cron-job: {{ BRANCH }}-{{ PROJECT }}-mailer-realtime
+spec:
+  schedule: "*/2 * * * *"
+  successfulJobsHistoryLimit: 0
+  failedJobsHistoryLimit: 0
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: k8s-cronjob
+              image: gcr.io/{{ GCP_PROJECT_ID }}/k8s-cronjob:current
+              env:
+                - name: URL
+                  value: {{ WEB_POD_URL_INTERNAL }}/api/email_send_realtime
+---
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: {{ BRANCH }}-{{ PROJECT }}-mailer-batch
+  labels:
+    cron-job: {{ BRANCH }}-{{ PROJECT }}-mailer-batch
+spec:
+  schedule: "*/10 * * * *"
+  successfulJobsHistoryLimit: 0
+  failedJobsHistoryLimit: 0
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: k8s-cronjob
+              image: gcr.io/{{ GCP_PROJECT_ID }}/k8s-cronjob:current
+              env:
+                - name: URL
+                  value: {{ WEB_POD_URL_INTERNAL }}/api/email_send_batch

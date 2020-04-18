@@ -1,0 +1,51 @@
+# Here is an extensive PHP docker section with most modules. It weighs 330MB, so remove according to project's needs.
+
+RUN apt-get update \
+    # generic libraries
+    && apt-get install -y \
+        libssl-dev \
+        libxml2-dev \
+    # PHP modules
+    && docker-php-ext-install \
+        exif \
+        ftp \
+        gettext \
+        intl \
+        pdo_mysql \
+        soap \
+        wddx \
+    # Composer
+    && curl -sS https://getcomposer.org/installer \
+        | php -- --install-dir=/usr/bin/ --filename=composer \
+    # gd
+    && apt-get install -y \
+        libfreetype6-dev \
+        libjpeg62-turbo-dev \
+        libpng-dev \
+    && docker-php-ext-configure gd \
+        --with-freetype-dir=/usr/include/ \
+        --with-jpeg-dir=/usr/include/ \
+        --with-png-dir=/usr/lib/ \
+    && docker-php-ext-install -j$(nproc) gd \
+    # HTMLdoc
+    && apt-get install -y htmldoc \
+    # imagemagick
+    && apt-get install -y --force-yes \
+        libmagickwand-dev --no-install-recommends \
+        && pecl install imagick-3.4.4 \
+        && docker-php-ext-enable imagick \
+    # imap
+    && apt-get install -y libc-client-dev libkrb5-dev \
+        && docker-php-ext-configure imap --with-kerberos --with-imap-ssl \
+    # xslt
+    && apt-get install -y libxslt-dev \
+        && docker-php-ext-install xsl \
+    # zip
+    && apt-get install -y \
+        libzip-dev \
+        zip \
+        && docker-php-ext-configure zip --with-libzip \
+        && docker-php-ext-install zip \
+    # Purge apt
+    && apt-get clean -y && apt-get autoclean -y && apt-get autoremove -y \
+        && rm -rf /var/lib/apt/lists/*

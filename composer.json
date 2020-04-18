@@ -1,0 +1,8 @@
+{
+    "require-dev": {
+        "deployer/deployer": "^6.4"
+    },
+    "require": {
+        "symfony/dotenv": "^4.3"
+    }
+}

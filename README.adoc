@@ -1,0 +1,1481 @@
+= Symfony application on GKE
+:author: Eric Jacolin
+:email: eric.jacolin@free.fr
+:revnumber: 0.1
+:revdate: 2019-04-18
+:revremark:
+:version-label!:
+:sectnums:
+:toc:
+:toclevels: 3
+:imagesdir: docs/architecture-images
+// Unfortunately Github doesn't support include statements
+ifndef::env-github[]
+include::docs/README.config.adoc[]
+endif::[]
+ifdef::env-github[]
+// Copy the included section
+:GCP_PROJECT: myproject-123456
+:GCP_REGION: us-central1
+:GCP_ZONE: us-central1-c
+:PROJECT: myproject
+:GITHUB_REPO: myproject
+:GITHUB_ACCOUNT: myorganization
+:WEB_URL: myproject.com
+:GKE_CLUSTER: myproject
+:GKE_POOL: default-pool
+:GKE_VM_INSTANCE: gke-myproject-default-pool-abcdef12-r20r
+endif::[]
+
+== Architecture
+
+=== What is this for?
+
+This is a recipe for deploying a relatively simple Symfony application on the Google Kubernetes
+Engine. It includes all the configuration files and build scripts.
+
+It is based on the implementation notes of a recent project. I tidied them up so that
+they could be shared. Hope this helps.
+
+How to use it:
+
+* Download the repo
+* Prepare your local and remote infrastructure as explained on this page
+* Install `composer.json`
+* Customize `sf/composer.json` if needed and install
+* Adapt the `conf/env` files to your environments
+* Adapt the `docs/README.config.adoc` files to your project configuration
+* Start developing your Symfony application
+
+=== Principles
+
+Key principles underlying this design:
+
+. Adhere to the 12-factors principles
+. Identical code deployed in local and remote environments
+. Easy deployment on the GCP (Google Cloud Platform)
+. Minimum infrastructure requirements, low infrastructure cost
+
+Assumptions:
+
+. Code repository on Github
+
+=== Architecture overview
+
+==== Local architecture
+image::architecture-local.png[]
+
+Kubernetes:
+
+* Kubernetes cluster on Minikube, includes its own Docker environment
+* The user data volumes on the host are mounted on the `/hosthome` location, where they
+are visible to the Kubernetes cluster. From there they can be mounted as persistent volumes
+onto the container
+* Connect to a MySQL database on the host, external to the cluster
+
+The application manages two types of user files:
+
+* Public files, served directly by the web proxy server
+* Private files, subject to access control, served by the Symfony application
+* File storage abstraction using Flysystem, in `local` mode
+
+
+==== Remote architecture
+image::architecture-remote.png[]
+
+Kubernetes:
+
+* GKE (Google Kubernetes Engine) cluster
+* GCP Docker image registry
+* Permanent storage on Google Cloud Storage buckets, public buckets for public files,
+private buckets for private files
+* Connect to Google Cloud SQL/ MySQL database
+
+Application files:
+
+* Public files are served directly by the web proxy server, proxying to Cloud Storage
+buckets API
+* Private files are served by the web application
+* File storage abstraction using Flysystem, in `gcloud` (Cloud Storage) mode
+
+We use Cloud Shell to build and deploy releases, with PHP Deployer scripts:
+
+* Pull from Github repo
+* Build Docker images, push images to the GCP Registry
+* Update GKE deployment manifest with new image tag
+
+==== Identical code
+
+With this recipe, we have identical Symfony application code and Kubernetes services,
+deployments and cronjobs definitions across all environments, local as well as remote.
+
+All differences between environments are reflected in project-level `.env` configuration files.
+
+==== Limitations
+
+The architecture is suited for a relatively simple web application, with relatively modest
+traffic and SLAs, or a MVP.
+
+The limitations, deliberate for a simple project, can easily be extended as needed as follows.
+
+Here we assume that an Apache server in reverse proxy mode is deployed on a free tier
+Compute Engine VM. For bigger sites one would typically use HTTPS Load Balancers
+which are expensive.
+
+[cols="3*", options="header"]
+|===
+|Limitation
+|Rationale
+|How to extend
+
+|Single GKE node
+|Cost is proportional to the number of nodes +
+No need for high availability
+|Add nodes to the node pool +
+Add node pool in a different zone
+
+|Single web application pod
+|Traffic can be supported by a single pod +
+A few seconds of downtime during a release is acceptable
+|Several nodes and pods, behind a load balancer
+
+|Sessions stored in the container
+|Single pod so no need to implement session affinity
+|Implement session affinity in the load balancer or reverse proxy +
+Alternatively store session information in Google Cloud Memorystore (managed Redis)
+
+|Symfony logs stored locally
+|Configure Monolog to send emails (not yet available - see below)
+|Send Symfony logs to Stackdriver
+
+|Partial CI/CD
+|Deployment by manual execution of a Deployer script in Cloud Shell +
+(Github web hooks cannot access Cloud Shell)
+|Deploy Jenkins on GCP +
+Use Cloud Source Repository instead of Github
+
+|No test automation in the deployment
+|End-to-end tests not automated
+|Automate tests, and add test tasks to the Deployer script
+
+|Single pod used for web and batch
+|Load on web pod can accommodate batch jobs
+|Deploy a separate pod dedicated to batch jobs
+
+|Symfony Mailer not yet integrated with Monolog
+|Limitation of the current Mailer version; expecting this to be fixed soon
+(https://github.com/symfony/symfony/pull/33456[Issue])
+|-
+
+|Symfony Mailer does not yet supports multiple transports
+|Limitation of the current Mailer version; expecting this to be fixed soon
+(https://github.com/symfony/symfony/issues/35750[Issue]) +
+For low volumes a single transport suffices
+|-
+|===
+
+=== Environments
+
+We use a 2x2 matrix of environments:
+
+* "host": local (developer's laptop)|remote (GCP)
+* "branch": dev|master
+
+Here is their meaning:
+
+[cols="3*", options="header"]
+|===
+|{nbsp}{nbsp}{nbsp}{nbsp}{nbsp}{nbsp}Host +
+Branch
+|Local
+|Remote (GCP)
+
+|dev
+|Dev branch
+|Test site
+
+|master
+|Prod bug hotfix
+|Prod site
+|===
+
+Resources that are specific to hosts, branches or both, are pre/postfixed accordingly.
+For example:
+
+* MySQL DB name: `{PROJECT}_dev`, `{PROJECT}_master`
+* Env files: `.env.dev.local`, `.env.dev.remote`, `.env.master.local`, `.env.master.remote`
+
+In the local environment, the Symfony working directory is mounted externally on
+the container, thus code changes are visible immediately.
+
+To switch between dev and master environments in the local environment:
+
+* Copy the relevant `.env` file from `conf/env` to the Symfony root folder `sf`
+* Check out the master or dev branch (or feature branch as the case may be).
+
+In the remote (GCP) environments, the Symfony code is ADD-ed to the Docker image build,
+including the correct `.env` file.
+
+=== Folder structure
+
+The folder structure is as follows:
+
+[cols="1,2,2", options="header"]
+|===
+|Folder
+|Contents
+|Comments
+
+|`<root>`
+|Project root, git root
+|
+
+|`{vbar}-- assets`
+|Assets to build with Webpack Encore
+|css, js
+
+|`{vbar}-- build`
+|Deployment built artefacts
+|Is emptied at the beginning of a build process. Gitignored
+
+|`{vbar}-- conf`
+|All configuration
+|
+
+|`{nbsp}{nbsp}{nbsp}{vbar}-- deployer`
+|PHP Deployer scripts, Deployer hosts configuration
+|
+
+|`{nbsp}{nbsp}{nbsp}{vbar}-- docker`
+|Docker image templates
+|Web and batch components
+
+|`{nbsp}{nbsp}{nbsp}{vbar}-- env`
+|Environment variables
+|Depend on host and branch
+
+|`{nbsp}{nbsp}{nbsp}{vbar}-- infra`
+|Container configuration file templates
+|Apache, PHP, msmtp +
+Docker images include the `dockerize` script, which substitutes environment
+variables at container build time
+
+|`{nbsp}{nbsp}{nbsp}{vbar}-- k8s`
+|Kubernetes manifest templates: service, deployment, cronjob
+|Depend on host
+
+|`{vbar}-- sf`
+|Symfony project root folder
+|The Symfony .env file is built dynamically at build time based on project .env files
+
+|`{vbar}-- var`
+|Symfony var files (cache, log)
+|Mounted externally to the container so that logs are persisted
+
+|`{vbar}-- vendor`
+|PHP libraries used by Deployer
+|Managed by Composer, distinct from PHP libraries of the Symfony application which are
+managed under the `sf` folder
+
+|`{vbar}-- webpack`
+|Webpack script and configuration
+|
+|===
+
+==== Environment configuration
+
+For simplicity we use a single `.env` file which contains all environment parameters needed
+by either Docker, PHP Deployer or Symfony.
+
+For each combination of host (local|remote) and branch (dev|master) there is a project
+environment configuration file (e.g. `.env.dev.local`). Those are located in the `conf/env` folder.
+
+The build process uses these files to generate two `.env` files:
+
+1. The Docker build context `.env` file
+2. The Symfony `.env` file
+
+These files contain all environment-specific parameters except secrets.
+Secrets are created as OS environment variables at container build time from Kubernetes secrets.
+Symfony looks at OS environment variables when it can't find an environment variable
+in the Symfony `.env` file.
+
+==== Deployer
+
+https://deployer.org/[Deployer] is a simple deployment tool written in PHP.
+It is open source and free. It contains pre-defined recipes designed for traditional
+FTP deployments; those are not useful in a Kubernetes context, so we wrote new scripts
+from scratch.
+
+We use Deployer scripts to:
+
+. Generate service/ cronjob manifests (usually done only once)
+. Generate deployment manifests (usually done only once)
+. Deploy new container version (done at every release, only remotely)
+
+We run Deployer scripts on:
+
+* local laptop for local environment
+* Cloud Shell for GCP environments
+
+The scripts take the parameters:
+
+* BRANCH (see signification above):
+** dev: dev branch
+** master: master branch
+* TAG:
+** on remote environments, a git tag version is pulled and deployed
+** on local environment: 'current'. The container needs only rebuilding infrequently,
+as it mounts the Symfony working directory, obscuring the ADD directive
+in the Dockerfile, thus serves whatever is currently checked out
+in the working directory. Note that we use 'current' instead of 'latest' as 'latest'
+forces a rebuild of the container, which we don't want locally.
+
+Outline of the remote build process:
+
+. check out the tagged version from Github (into a detached branch)
+. copy the relevant `.env.<BRANCH>.remote` file to both `build/.env` and to `sf/.env`
+. build a deployment manifest to `build/deployment.yml`. This manifest contains the
+new container tag
+. zip `sf` into a Symfony archive
+. build the container:
+.. passing the `build/.env` as environment parameters
+.. ADD the Symfony archive to the container
+.. COPY infrastructure configuration templates
+.. RUN `dockerize` on infrastructure configuration templates (see next section)
+. apply the updated Kubernetes deployment manifest
+
+==== Infrastructure configuration
+
+The following container infrastructure files are templated. Running `dockerize` interpolates
+placeholders in the templates with variables from the Docker build `.env` file.
+
+[cols="1,2,2", options="header"]
+|===
+|Template
+|Target file in container
+|Contents
+
+|`php.ini`
+|`/usr/local/etc/php/php.ini` +
+`/etc/php/7.3/apache2/php.ini`
+|php.ini for CLI and the Apache PHP module
+
+|`virtual-host.conf`
+|`/etc/apache2/sites-enabled/virtual-host.conf`
+|Single virtual host for the web application
+
+|`ports.conf`
+|`/etc/apache2/ports.conf`
+|Port listened to by Apache
+
+|`msmtprc`
+|`/etc/msmtprc`
+|msmtp configuration. +
+Note that the SMTP password is not stored in clear but gotten from an OS environment
+variable.
+|===
+
+For more info on dockerize, https://github.com/powerman/dockerize[see].
+
+See also `conf/docker/Dockerfile.PHP.example` for a typical Docker RUN command with commonly
+used PHP libraries. Adapt as needed.
+
+==== Secrets management
+
+The application uses three secrets:
+
+* `DB_PASSWORD`: MySQL account password
+* `MAILER_PASSWORD`: SMTP account password
+* `APP_SECRET`: encryption key
+
+Secrets are mounted on the container at build time from Kubernetes secrets.
+
+With this container build process, secrets only exist as container OS
+environment variables.
+
+== Symfony application
+
+=== Proxies
+
+We modify `/public/index.php` so that it correctly reads the headers forwarded by the
+web reverse proxy.
+
+This is safe with regards to Symfony upgrades.
+
+https://symfony.com/doc/current/deployment/proxies.html[See] for reference.
+
+=== Batch jobs
+
+A Symfony application is typically used in two modes: online requests and batch jobs.
+
+For this recipe we use a single container to serve both.
+
+We define batch jobs as Kubernetes cronjobs. Those jobs do the following:
+
+* Instantiate a simple Alpine/curl container
+* Send a curl GET request to the application pod
+* The request is handled by a normal Symfony controller
+* Complete job and log the job status depending on the HTTP response (200 or 500)
+
+Note that in a traditional, non-containerized Symfony application we would implement
+Console Commands in the controller, triggered by command line php calls, scheduled by a cron job.
+We can't do this with Kubernetes, since the Kubernetes cronjob cannot execute remote shell commands on the
+container and is limited to HTTP requests.
+
+=== Sending emails
+
+To send emails, we use the following components:
+
+* The Symfony Mailer library to create emails
+* The Symfony Messenger to queue emails in the database
+* The msmtp MTA (message transfer agent) to send emails
+* Kubernetes cronjobs to process Messenger queues
+
+The new Mailer library replaces the deprecated SwiftMailer library and is now the recommended
+library for new projects.
+
+For transport the Symfony application does not establish a SMTP connection to the
+remote SMTP server, but instead sends messages to a local MTA running in the container.
+We use `msmtp` as MTA. msmtp is a popular successor to sendmail, easier to configure, with a
+sendmail-compatible API.
+The benefits of using a MTA, albeit more complex, are:
+
+* The messages are sent to the remote SMTP server by the MTA background process, not PHP scripts
+* The MTA handles exceptions well, such as SMTP server unavailable or returning errors.
+
+Here we configure two asynchronous transports:
+
+* `realtime_mailer` for high priority emails (e.g. confirmation after registration)
+* `batch_mailer` for low priority emails (e.g. batch newsletter)
+
+These transports are configured in `Sendmail` mode.
+
+The process of sending an email is the following:
+
+* A Symfony controller action (online or batch) generates an email, indicates the transport
+method (high or low priority)
+* The Messenger component puts these messages in either queue in the database
+* The Messenger component processes these two queues in batch mode and sends the emails
+to the msmtp MTA (which runs on the same container)
+** The high priority batch job runs every 2mn with a time-out of 100s
+** The low priority batch job runs every 20mn
+* The MTA sends the emails to the remote SMTP server roughly in the order it has
+received them.
+
+See previous section for how cronjobs are implemented in Kubernetes.
+
+In the messenger configuration file we define the queue where to put emails.
+Here we use the application database to persist the queues (other methods are available,
+notably Redis). We pass the `queue_name` argument to indicate the queue.
+
+We also define a dead-letter queue where failed messages will be logged. This will be
+rare as it is the MTA that is likely to fail while sending emails instead of the Symfony
+application.
+
+.config/packages/messenger.yaml
+[source,yaml]
+----
+    framework:
+        messenger:
+            # Uncomment this (and the failed transport below) to send failed messages to this transport for later handling.
+            failure_transport: failed
+
+            transports:
+                # https://symfony.com/doc/current/messenger.html#transport-configuration
+                failed: 'doctrine://default?queue_name=failed'
+                # sync: 'sync://'
+                batch_mailer: 'doctrine://default?queue_name=batch_mailer'
+                realtime_mailer: 'doctrine://default?queue_name=realtime_mailer'
+
+                routing:
+                    # Route your messages to the transports
+                    'Symfony\Component\Mailer\Messenger\SendEmailMessage':  realtime_mailer
+----
+
+In the mailer configuration file we define the action to take when actually sending an email.
+Usually this is either a SMTP DSN string or Sendmail. Here we use Sendmail.
+
+.config/packages/mailer.yaml
+[source,yaml]
+----
+framework:
+    mailer:
+        transports:
+            #main: '%env(MAILER_DSN)%'
+            realtime_mailer: 'sendmail://localhost'
+----
+
+Mailer is a new library, and has currently some limitations that we expect to be remediated soon:
+
+* No support for multiple async transports (https://github.com/symfony/symfony/issues/35750[See])
+* No ability to configure the sendmail command (https://github.com/symfony/symfony/issues/34386[See]) +
+The workaround is to overwrite the command directly in the library file
+`sf/vendor/symfony/mailer/Transport/SendmailTransportFactory.php`
+with `command: '/usr/bin/msmtp -t'`
+(watch out when you upgrade the library with Composer
+as you will need to reapply this change manually)
+* No integration with Monolog (https://github.com/symfony/symfony/pull/33456[See])
+
+The msmtp configuration is defined in the `conf/infra/msmtprc.tpl` template file.
+It contains:
+
+* SMTP account details
+* The password is not stored in clear but is defined by a shell command: `"echo $MAILER_PASSWORD"`
+* Location of the msmtp log file. Here we define this location in a persistent volume,
+similarly to the Symfony log file.
+
+=== File storage
+
+For application user file management we use the Flysystem library, which provides filesystem abstraction
+across a number of storage mechanisms.
+
+* The local environment uses the `local` adapter (local file system)
+* The GCP environment uses the `gcloud` adapter (Cloud Storage).
+
+The code to read/ write files is identical in all environments. Only the environment configuration
+changes.
+
+In this recipe we assume that the application needs to manage:
+
+* Public files, served directly by the web proxy without access control
+* Private files, subject to access control, and served by the Symfony application
+* For local and remote file storage
+
+Hence four adapter configuration:
+
+.config/packages/flysystem.yaml
+[source,yaml]
+----
+flysystem:
+    storages:
+        storage.private.local:
+            adapter: 'local'
+            options:
+                directory: '%kernel.project_dir%/../data-private'
+        storage.public.local:
+            adapter: 'local'
+            options:
+                directory: '%kernel.project_dir%/../data-public'
+        storage.private.gcloud:
+            adapter: 'gcloud'
+            options:
+                client: 'Google\Cloud\Storage\StorageClient' # The service ID of the Google\Cloud\Storage\StorageClient instance
+                bucket: '%env(GCS_PRIVATE_BUCKET)%'
+                prefix: ''
+                api_url: 'https://storage.googleapis.com'
+        storage.public.gcloud:
+            adapter: 'gcloud'
+            options:
+                client: 'Google\Cloud\Storage\StorageClient' # The service ID of the Google\Cloud\Storage\StorageClient instance
+                bucket: '%env(GCS_PUBLIC_BUCKET)%'
+                prefix: ''
+                api_url: 'https://storage.googleapis.com'
+----
+
+Thus Symfony creates four services (`flysystem.storage.private.local`, etc)
+corresponding to these four adapters.
+
+What we need next is a dynamic definition of the two services we actually need, based on
+hosting environment (local or remote).
+
+We cannot declare dynamic service aliases in Symfony based on environment variables,
+since Symfony services are "compiled" ahead of time.
+
+Instead we create a helper class that dynamically selects the right underlying adapters. Controllers
+use this class to inject adapters.
+
+Here are the service definitions:
+
+.config/packages/flysystem.yaml
+[source,yaml]
+----
+parameters:
+    storage.public.adapter: '%env(STORAGE_PUBLIC_ADAPTER)%'
+    storage.private.adapter: '%env(STORAGE_PRIVATE_ADAPTER)%'
+    cdn_url: '%env(CDN_URL)%'
+
+services:
+    _defaults:
+        autowire: true      # Automatically injects dependencies in your services.
+        autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
+        public: false       # Allows optimizing the container by removing unused services; this also means
+                            # fetching services directly from the container via $container->get() won't work.
+                            # The best practice is to be explicit about your dependencies anyway.
+        bind:
+            $storagePublicAdapter: '%storage.public.adapter%'
+            $storagePrivateAdapter: '%storage.private.adapter%'
+----
+
+And the underlying helper class:
+
+.src/Utils/StorageUtils.php
+[source,php]
+----
+<?php
+
+namespace App\Utils;
+
+use League\Flysystem\FilesystemInterface;
+
+class StorageUtils
+{
+
+    public function __construct(
+        // Available adapters
+        FilesystemInterface $storagePublicLocal,
+        FilesystemInterface $storagePrivateLocal,
+        FilesystemInterface $storagePublicGcloud,
+        FilesystemInterface $storagePrivateGcloud,
+        // Environment specific selected adapters
+        $storagePublicAdapter,
+        $storagePrivateAdapter
+    )
+    {
+        $this->storagePublicLocal = $storagePublicLocal;
+        $this->storagePrivateLocal = $storagePrivateLocal;
+        $this->storagePublicGcloud = $storagePublicGcloud;
+        $this->storagePrivateGcloud = $storagePrivateGcloud;
+        $this->storagePublicAdapter = $storagePublicAdapter;
+        $this->storagePrivateAdapter = $storagePrivateAdapter;
+    }
+
+    /**
+     * Return dynamic public storage adapter (based on environment configuration)
+     */
+    public function getPublicAdapter()
+    {
+        if ($this->storagePublicAdapter == 'storage.public.local') {
+            return $this->storagePublicLocal;
+        } elseif ($this->storagePublicAdapter = 'storage.public.gcloud') {
+            return $this->storagePublicGcloud;
+        }
+    }
+
+    /**
+     * Return dynamic private storage adapter (based on environment configuration)
+     */
+    public function getPrivateAdapter()
+    {
+        if ($this->storagePrivateAdapter == 'storage.private.local') {
+            return $this->storagePrivateLocal;
+        } elseif ($this->storagePrivateAdapter = 'storage.private.gcloud') {
+            return $this->storagePrivateGcloud;
+        }
+    }
+
+}
+----
+
+The storage mechanics are abstracted from the application. For a given adapter, the
+application uses `get` and `put` methods for file paths on a virtual file system.
+
+On local hosting:
+
+* External persistent folders on the host are mounted on the Minikube cluster, and
+in turn mounted as persistent volumes on the container
+* The root of the virtual file system is the mount point of the persistent volume
+in the container
+* The application read/writes to these folders using the `local` adapter
+
+On GKE hosting:
+
+* We use Cloud Storage buckets for storage
+* The root of the virtual file system is the bucket `gs://bucket`
+* The application read/writes to these buckets using the `gcloud` adapter, which uses
+`gsutil .. gs://bucket` commands
+* The buckets must be configured for ACL access as the Symfony application will use
+a service account to access the buckets.
+
+The `CDN_URL` environment variable is used by the application to create URLs to public
+assets that are served directly by the web proxy, outside the application.
+
+
+=== Application data
+
+Application data (`var/cache`, `var/log`) are stored on a persistent volume on the Kubernetes node.
+
+To that effect the `var` directory is mounted externally on the container.
+
+PHP sessions are saved in the `/tmp` folder inside the container.
+
+=== Commands
+
+These commands are useful for debugging purposes. Run them from inside the container shell.
+
+.In the container shell:
+[source,bash,subs=attributes+]
+----
+php bin/console debug:messenger
+php bin/console debug:container
+php bin/console cache:clear --no-warmup --env=dev
+----
+
+== Local environment
+
+In the local environment we instantiate a Kubernetes engine using the Minikube
+package.
+
+=== Minikube
+
+. Install kubectl
+. Install https://kubernetes.io/docs/setup/learning-environment/minikube[minikube]
+via direct download
+. Bind mounts the host folders used to persist application user data host folder to `/home`,
+which is accessible from within the Minikube cluster as `/hosthome`
+
+.In the local shell:
+[source,bash,subs=attributes+]
+----
+sudo mount --bind /opt/data/storage-buckets/app.{WEB_URL} /home/app.{WEB_URL} \
+&& sudo mount --bind /opt/data/storage-buckets/app-test.{WEB_URL} /home/app-test.{WEB_URL} \
+&& sudo mount --bind /opt/data/storage-buckets/cdn.{WEB_URL} /home/cdn.{WEB_URL} \
+&& sudo mount --bind /opt/data/storage-buckets/cdn-test.{WEB_URL} /home/cdn-test.{WEB_URL} \
+&& sudo mount --bind /opt/data/projects/{PROJECT}/sf /home/{PROJECT}-sf \
+&& minikube start --driver=virtualbox
+----
+
+Then optionally open the minikube dashboard in a browser:
+
+.In the local shell:
+[source,bash,subs=attributes+]
+----
+# Open the minikube dashboard in a browser
+minikube dashboard
+----
+
+On Linux, within the minikube cluster, the host does not have a DNS name. This is available on MacOS
+hosts (name is `host.docker.internal`). There is a https://github.com/moby/libnetwork/pull/2348[pull request]
+to this effect.
+You have to use the host IP address `10.0.2.2` instead.
+
+=== Docker context
+
+Before buiding containers (`docker build`) ensure you are in the correct context:
+host or Minikube VM. Minikube has its own Docker engine, distinct from that of your
+laptop host.
+
+.In the local shell:
+[source,bash]
+----
+# switch to the Minikube VM context (must be run in each new terminal session)
+eval $(minikube docker-env)
+# switch back to local Docker context
+eval $(minikube docker-env -u)
+----
+
+=== Kubernetes context
+
+You will be switching between local and GKE Kubernetes contexts. Ensure you are in the correct
+context.
+
+.In the local shell:
+[source,bash,subs=attributes+]
+----
+kubectl config get-contexts
+# output:
+CURRENT   NAME                                             CLUSTER
+*         gke_{GCP_PROJECT}_{GCP_ZONE}_{GKE_CLUSTER}       gke_{GCP_PROJECT}_{GCP_ZONE}_{GKE_CLUSTER}
+          minikube                                         minikube
+# To switch to another context:
+kubectl config use-context gke_{GCP_PROJECT}_{GCP_ZONE}_{GKE_CLUSTER}
+# or
+kubectl config use-context minikube
+----
+
+Notes:
+
+* I tried to use Minikube with `--vm-driver=none`, so that it would use the host Docker
+engine, but this didn't work and probably never will:
+
+----
+sudo minikube start --vm-driver=none --extra-config=kubelet.resolv-conf=/run/systemd/resolve/resolv.conf`
+----
+
+https://minikube.sigs.k8s.io/docs/reference/drivers/none/[See this] and
+https://medium.com/@nieldw/running-minikube-with-vm-driver-none-47de91eab84c[this]
+
+* To switch editors within the cluster:
+
+`KUBE_EDITOR=pico kubectl -n kube-system edit ...`
+
+The Minikube cluster node is visible in the host at `http://192.168.99.100:31645/`
+(the port is randomly assigned, adapt as needed).
+
+=== Useful commands
+https://kubernetes.io/docs/reference/kubectl/cheatsheet/[kubectl cheatsheet]
+
+.In the local shell:
+[source,bash,subs=attributes+]
+----
+# View minikube logs
+minikube logs
+
+# Find what IP the host machine has inside the minikube cluster:
+minikube ssh "route -n | grep ^0.0.0.0 | awk '{ print \$2 }'"
+
+# View pods status
+kubectl get po -A
+
+# Remove a pod
+kubectl -n default delete pod dev-{PROJECT}-5dd94c78c-mlbnh
+kubectl delete --grace-period=0 --force --namespace=default pod dev-{PROJECT}-5c5767d9b9-bj62r
+
+# Exec into a container:
+kubectl exec -it dev-{PROJECT}-6746b45f45-5xjmh -c dev-{PROJECT}-web -- sh
+
+# View a pod log
+kubectl logs dev-{PROJECT}-5b4c559756-vv4sl
+----
+
+== GCP environment
+
+=== GCP project
+
+Set project defaults:
+
+.In the local shell:
+[source,bash,subs=attributes+]
+----
+gcloud config set project {GCP_PROJECT}
+gcloud config set compute/region {GCP_REGION}
+gcloud config set compute/zone {GCP_ZONE}
+----
+
+Generate SSH keys, store locally in `~/.ssh/`
+
+=== Cloud Shell
+
+The Cloud Shell is used to deploy new releases.
+
+.In the Cloud shell:
+[source,bash,subs=attributes+]
+----
+# set project
+gcloud config set project {GCP_PROJECT}
+# clone the project repo:
+git clone git@github.com:{GITHUB_ACCOUNT}/{GITHUB_REPO}.git
+# install the Deployer vendor libraries
+cd {PROJECT} && composer install
+# install the Symfony vendor libraries
+cd {PROJECT}/sf && composer install
+----
+
+It is useful to SCP to Cloud Shell.
+
+Note that paths must be absolute. Use the `--recurse` flag for recursive copying.
+
+.In the local shell:
+[source,bash]
+----
+# To copy a remote directory to your local machine:
+gcloud alpha cloud-shell scp \
+    cloudshell:~/REMOTE-DIR \
+    localhost:~/LOCAL-DIR
+# Conversely:
+gcloud alpha cloud-shell scp \
+    localhost:~/LOCAL-DIR \
+    cloudshell:~/REMOTE-DIR
+----
+
+Also to SCP to a Compute Engine VM instance:
+
+.In the local shell:
+[source,bash]
+----
+# To copy a local directory to a remote VM:
+gcloud compute scp ~ my-vm-name:/tmp
+# Conversely:
+gcloud compute scp my-vm-name:/tmp ~
+----
+
+=== Web Proxy
+
+For a simple project or MVP one can deploy an Apache web proxy server on a free tier Compute Engine
+instance. This is free whereas GCP HTTPS Load Balancers are expensive.
+
+TO DO: publish recipe
+
+=== Cloud storage
+
+It is a good practice to create bucket names that are domain names associated to your
+project, as it guarantees global unicity.
+
+This requires domain ownership verification:
+
+* In the Google Search Console, add Property: `{WEB_URL}`
+* In your domain name DNS manager, add a TXT record with the provided text.
+
+Create the following buckets:
+
+* `app.{WEB_URL}`: private data, live site
+* `app-test.{WEB_URL}`: private data, test site
+* `cdn.{WEB_URL}`: public data, live site
+* `cdn-test.{WEB_URL}`: public data, test site
+
+Set bucket access control policy to ACLs, since the PHP flysystem API will use a service
+account to access the Cloud Storage API.
+
+To make buckets public:
+
+.In the local shell:
+[source,bash,subs=attributes+]
+----
+gsutil iam ch allUsers:objectViewer gs://cdn-test.{WEB_URL}
+gsutil iam ch allUsers:objectViewer gs://cdn.{WEB_URL}
+----
+
+Using Chrome, upload folders/ files using the Cloud Storage console or the `gsutil cp` command.
+
+Example of commands to copy files at the command line from local and remote environments:
+
+.In the local shell:
+[source,bash,subs=attributes+]
+----
+# local to remote
+gsutil cp * gs://cdn.{WEB_URL}/dir
+# remote to local
+gsutil cp gs://cdn.{WEB_URL}/dir/* .
+# remote to remote
+gsutil cp gs://cdn.{WEB_URL}/dir/* gs://cdn-test.{WEB_URL}.org/dir
+----
+
+=== Cloud database
+
+==== Create the database
+
+On the Gcloud SQL Console, create DB instance called `{PROJECT}-db` (MySQL 5.7):
+
+Create Database:
+
+* Character set/ Collation => `utf8mb4/ utf8mb4_unicode_ci`
+* Connectivity: Private IP
+
+Don't use the recommended collation for MySQL 8.0 `utf8mb4_0900_ai_ci` as it is
+not supported on MySQL 5.7.
+
+Note down the DB instance external IP address (`10.1.2.3`). You will use it in your
+`.env` configuration files.
+
+==== Test connectivity from VPC
+
+Instantiate temporarily a Compute Engine VM in the same VPC (or alternatively use
+your web proxy VM).
+
+Install the mysql CLI: `apt-get update && apt-get install -y mysql-client-5.7`
+
+.In the VM shell:
+[source,bash,subs=attributes+]
+----
+# root user - enter password at prompt
+mysql -u root -p -h 10.1.2.3
+# application user - enter password at prompt
+mysql -u {PROJECT}_dev -p -h 10.1.2.3
+----
+
+Note:
+
+* You can't connect from the Cloud Shell, as it is outside the project VPC.
+
+==== Create DB accounts
+
+On the Gcloud SQL Console > Users > Create MySQL user accounts:
+
+* `{PROJECT}_dev`
+* `{PROJECT}_master`
+
+Allow from any host (%)
+
+Apply GRANT commands as required by your application. A typical one would be:
+
+.In the MySQL shell:
+[source,mysql]
+----
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER, CREATE TEMPORARY TABLES, EXECUTE,
+    CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, EVENT, TRIGGER, LOCK TABLES
+    ON `<DB>`.* TO '<USER>'@'%';
+FLUSH PRIVILEGES;
+----
+
+==== Application service account
+
+Create a `{PROJECT}-dev` Cloud IAM service account for the application. Add roles:
+
+* Storage > Storage Object Admin
+* Cloud SQL > Cloud SQL Client
+
+The service account is named `{PROJECT}-dev@{GCP_PROJECT}.iam.gserviceaccount.com`
+
+Create a JSON key associated to this account => `{GCP_PROJECT}-abcdef123456.json`.
+
+Create a secret and deploy the cloudsql-proxy.yml service:
+
+.In the Cloud shell:
+[source,bash,subs=attributes+]
+----
+kubectl create secret generic cloudsql-proxy-credentials \
+    --from-file=credentials.json={GCP_PROJECT}-abcdef123456.json \
+    -o yaml \
+    > secrets.cloudsql-proxy-credentials.yml
+kubectl apply -f secrets.cloudsql-proxy-credentials.yml
+kubectl apply -f cloudsql-proxy.yml
+----
+
+After you have deployed the test application container (see below), test the connection
+from inside the container:
+
+.In the local shell:
+[source,bash,subs=attributes+]
+----
+# exec into the container:
+kubectl exec -it dev-{PROJECT}-6954dc99d5-7f6bd sh
+# install the mysql CLI:
+apt-get update && apt-get install -y mysql-client-5.7
+# test the connection
+mysql -u root -p -h cloudsql-proxy:3306 {PROJECT}_dev
+----
+
+==== Import a database
+
+To import a database, use a VM, for example your web proxy VM.
+
+All tables must be in the InnoDB format.
+
+. Export the DB in SQL format with Adminer or PhpMyAdmin
+. SCP the sql file to the VM:
+
+.In the local shell:
+[source,bash,subs=attributes+]
+----
+gcloud compute scp \
+    ~/{PROJECT}_dev.sql \
+    {PROJECT}-webproxy:/tmp
+----
+
+[start=3]
+. Import the DB:
+
+.In the webproxy VM shell:
+[source,bash,subs=attributes+]
+----
+mysql -u root -p -h 10.1.2.3 {PROJECT}_dev < /tmp/{PROJECT}_dev.sql
+----
+
+=== GKE
+
+==== Create the cluster
+
+Create a 1-node VPC-native cluster with workload identity enabled:
+
+.In the local shell:
+[source,bash,subs=attributes+]
+----
+gcloud beta container clusters create {PROJECT} \
+  --identity-namespace {GCP_PROJECT}.svc.id.goog \
+  --zone {GCP_ZONE} \
+  --num-nodes 1 \
+  --machine-type n1-highcpu-2 \
+  --enable-autoupgrade
+----
+
+Notes:
+
+* A node requires 800mCPU of Kubernetes overhead
+* Web application (Ubuntu) pods typically require 100mCPU each
+* Batch (Alpine) pods also require 100mCPU each (briefly, when instantiated)
+* Therefore the machine type of node pools must have at least 2 vCPU, for example is `n1-highcpu-2`
+* Creates a pool name named `default-pool`
+* To find the external port (NodePort) of a service (in the example below: `32265`):
+
+`kubectl describe services dev-{PROJECT}`
+
+The DNS name of the cluster single node is:
+
+`gke-{GKE_CLUSTER}-{GKE_POOL}-0f60a816-5hhl.{GCP_REGION}.c.{GCP_PROJECT}.internal`
+
+Notes:
+
+* `--enable-ip-alias` creates a VPC-native cluster, which is what you want
+* If a kubectl command fails with a `x509: certificate signed by unknown authority`
+error message, regenerate your credentails by running `gcloud auth login` locally
+
+==== Bind the service account
+
+Creating the cluster creates automatically:
+
+* A `default` namespace
+* A `default` Kubernetes service account (`kubectl get serviceaccount --namespace default`).
+At this stage this service account controls access only within the cluster.
+
+For a simple application it is fine to deploy all resources in this default namespace.
+
+The Kubernetes service account needs to access Google resources, so we bind it to the
+application Google service account.
+
+.In the local shell:
+[source,bash,subs=attributes+]
+----
+gcloud iam service-accounts add-iam-policy-binding \
+  --role roles/iam.workloadIdentityUser \
+  --member "serviceAccount:{GCP_PROJECT}.svc.id.goog[default/default]" \
+  {GCP_PROJECT}-dev@{GCP_PROJECT}.iam.gserviceaccount.com
+----
+
+Add corresponding annotation to the Kubernetes service account:
+
+.In the local shell:
+[source,bash,subs=attributes+]
+----
+kubectl annotate serviceaccount \
+  --namespace default \
+  default \
+  iam.gke.io/gcp-service-account={GCP_PROJECT}-dev@{GCP_PROJECT}.iam.gserviceaccount.com
+----
+
+Verify that the service account is configured correctly by running a test container
+provided by Google:
+
+.In the local shell:
+[source,bash,subs=attributes+]
+----
+kubectl run -it \
+  --generator=run-pod/v1 \
+  --image google/cloud-sdk \
+  --serviceaccount default \
+  --namespace default \
+  workload-identity-test
+----
+
+.In the container shell:
+[source,bash]
+----
+gcloud auth list
+----
+This should display a single Google service account, the one bound earlier. This is the service account
+the pod will use to access GCP services.
+
+== Build environment
+
+We use Cloud Shell as a build and deployment environment
+
+=== Install PHP 7.3
+
+https://computingforgeeks.com/how-to-install-php-7-3-on-ubuntu-18-04-ubuntu-16-04-debian/[See]
+
+.In the Google Cloud shell:
+[source,bash]
+----
+sudo add-apt-repository ppa:ondrej/php
+sudo apt-get update \
+sudo apt install php7.3-cli php7.3-mbstring php7.3-curl php7.3-xml php7.3-zip php7.3-curl
+----
+
+TO DO: replace the PHP CLI install by a Docker container... nicer and cleaner
+
+=== Github SSH key
+
+https://help.github.com/en/articles/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent[See]
+
+Create a new SSH key labelled "{PROJECT}-vm" locally. Register it on Github.
+Also create a corresponding config file:
+
+.In the local ~/.ssh/config file, append:
+[source,bash,subs=attributes+]
+----
+Host github.com
+    User git
+    Hostname github.com
+    PreferredAuthentications publickey
+    IdentityFile ~/.ssh/{PROJECT}-vm_rsa
+----
+
+==== GCP SSH key
+
+This key is used to SFTP into Compute Engine VMs, with Filezilla. Sometimes useful
+for debugging.
+
+.In the local shell:
+[source,bash,subs=attributes+]
+----
+gcloud beta compute --project {GCP_PROJECT} ssh --zone {GCP_ZONE} {GKE_VM_INSTANCE}
+----
+
+Copy the key files into ~/.ssh, chmod to 0660.
+
+=== Composer
+
+Composer is used to manage dependencies at two levels:
+
+* For PHP Deployer, at project root level
+* For the Symfony application, in the `sf` folder
+
+.In the Google Cloud shell:
+[source,bash,subs=attributes+]
+----
+# PHP Deployer
+cd ~/{PROJECT}
+composer install
+# Symfony
+cd sf
+composer install
+----
+
+== Deployment
+
+=== Deploy locally
+
+==== Secrets
+
+Create your secrets for each environment in a safe location outside the project directory.
+Those are in the form:
+
+./secrets/secrets.dev.yml
+[source,yaml,subs=attributes+]
+----
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dev-{PROJECT}-sf-secrets
+type: Opaque
+data:
+  # APP_SECRET: f71dbe52628a3f83a77ab494817525c6
+  # MAILER_PASSWORD: p@ssword1
+  # DB_PASSWORD: p@ssword2
+  # echo -n 'secret' | base64
+  APP_SECRET: ZjcxZGJlNTI2MjhhM2Y4M2E3N2FiNDk0ODE3NTI1YzY=
+  MAILER_PASSWORD: cEBzc3dvcmQx
+  DB_PASSWORD: cEBzc3dvcmQy
+----
+
+Deploy Kubernetes secrets locally:
+
+.In the local shell:
+[source,bash,subs=attributes+]
+----
+cd <secrets> dir
+kubectl config use-context minikube
+kubectl apply -f secrets.dev.yml
+kubectl apply -f secrets.master.yml
+----
+
+==== Cronjobs
+
+To execute cron jobs we instantiate a very simple Docker Alpine image with the cUrl
+library.
+
+.In the local shell:
+[source,bash,subs=attributes+]
+----
+cd {PROJECT}
+# Set Docker and Kubernetes contexts to Minikube
+eval $(minikube docker-env)
+# Build the Docker cronjob image
+docker build -f build/Dockerfile.cronjob -t k8s-cronjob:current .
+----
+
+==== Services
+
+We build services manifests with PHP Deployer and deploy them using kubectl.
+This is usually done only once.
+
+.In the local shell:
+[source,bash,subs=attributes+]
+----
+cd {PROJECT}
+# Set Docker and Kubernetes contexts to Minikube
+kubectl config use-context minikube
+# Deploy services (dev branch)
+php vendor/bin/dep --file=conf/deployer/deploy-k8s.php \
+    --hosts=localhost gen-service -o BRANCH=dev
+kubectl apply -f build/service.yml
+kubectl apply -f build/cronjob.local.yml
+# Deploy services (master branch)
+php vendor/bin/dep --file=conf/deployer/deploy-k8s.php \
+    --hosts=localhost gen-service -o BRANCH=master
+kubectl apply -f build/service.yml
+kubectl apply -f build/cronjob.local.yml
+----
+
+==== Releases
+
+The web application container mounts the Symfony working directory. There is no need
+to rebuild the container, unless, say, you need to add a PHP library. Just switch git
+branches as needed.
+
+The Minikube web application is visible on the host at: `192.168.99.100:32745`
+(adapt the port number)
+
+=== Deploy on GKE
+
+We use Cloud Shell to build and deploy on GKE.
+
+==== Pull the repo
+
+.In the Cloud shell:
+[source,bash,subs=attributes+]
+----
+git clone git@github.com:{GITHUB_ACCOUNT}/{GITHUB_REPO}.git
+cd {PROJECT}
+----
+
+==== Secrets
+
+Deploy Kubernetes secrets. Here those are the same as for the local environment.
+
+.In the local shell:
+[source,bash,subs=attributes+]
+----
+cd your-secrets-dir
+# Switch to GKE context
+kubectl config use-context gke_{GCP_PROJECT}_{GCP_ZONE}_{GKE_CLUSTER}
+kubectl apply -f secrets.dev.yml
+kubectl apply -f secrets.master.yml
+----
+
+==== Cronjobs
+
+Push the Alpine/cUrl image to GCR:
+
+.In the Cloud shell:
+[source,bash,subs=attributes+]
+----
+cd {PROJECT}
+docker build -f conf/docker/Dockerfile.cronjob -t k8s-cronjob:current .
+docker tag k8s-cronjob:current gcr.io/{GCP_PROJECT}/k8s-cronjob:current
+docker push gcr.io/{GCP_PROJECT}/k8s-cronjob:current
+----
+
+==== Services
+
+Deploy services manifests:
+
+.In the Cloud shell:
+[source,bash,subs=attributes+]
+----
+cd {PROJECT}
+# Switch to GKE context
+kubectl config use-context gke_{GCP_PROJECT}_{GCP_ZONE}_{GKE_CLUSTER}
+# Deploy services (test)
+php vendor/bin/dep --file=conf/deployer/deploy-k8s.php \
+    --hosts=remote gen-service -o BRANCH=dev
+kubectl apply -f build/service.yml
+kubectl apply -f build/cronjob.remote.yml
+# Deploy services (www)
+php vendor/bin/dep --file=conf/deployer/deploy-k8s.php \
+    --hosts=remote gen-service -o BRANCH=master
+kubectl apply -f build/service.yml
+kubectl apply -f build/cronjob.remote.yml
+----
+
+==== Releases
+
+The release process is as follows:
+
+. Git tag a release version
+. Push the tag to Github
+. In the Cloud Shell pull a detached branch corresponding to the tag
+. Execute the Deployer script; this:
+.. Builds a new container with a Docker tag identical to the git tag
+.. Applies an updated deployment manifest with the new Docker tag
+
+On a GKE single-node, single-pod deployment, this entails an interruption of service of
+about 30s. User sessions are destroyed.
+
+Commands:
+
+.In the local shell:
+[source,bash,subs=attributes+]
+----
+# tag a commit locally
+git tag 0.4.0
+# push tags
+git push origin --tags
+----
+
+.In the Cloud shell:
+[source,bash,subs=attributes+]
+----
+# Deploy new version - Test
+cd {PROJECT}
+php vendor/bin/dep --file=conf/deployer/deploy-k8s.php --hosts=remote deploy-remote \
+    -o BRANCH=dev -o TAG=0.4.0
+# Deploy new version - Prod
+cd {PROJECT}
+php vendor/bin/dep --file=conf/deployer/deploy-k8s.php --hosts=remote deploy-remote \
+    -o BRANCH=master -o TAG=0.4.0
+----
+
+== References
+
+Some random resources that I found useful. Not all apply to this recipe.
+
+=== Docker
+
+http://docs.blowb.org/index.html[The Blowb Project - Deploy Integrated Apps Using Docker]
+(Not used in this article but looks like it has many good ideas)
+
+=== Kubernetes
+
+https://codeburst.io/getting-started-with-kubernetes-deploy-a-docker-container-with-kubernetes-in-5-minutes-eb4be0e96370
+
+https://www.mirantis.com/blog/introduction-to-yaml-creating-a-kubernetes-deployment/
+
+https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.10/#container-v1-core
+
+https://vsupalov.com/yaml-kubernetes-examples-docs-spec/
+
+https://dzone.com/articles/kubernetes-cron-jobs
+
+https://stackoverflow.com/questions/14155596/how-to-substitute-shell-variables-in-complex-text-files
+
+https://dzone.com/articles/how-i-switched-my-blog-from-ovh-to-google-containe
+
+https://gravitational.com/blog/troubleshooting-kubernetes-networking
+
+https://estl.tech/configuring-https-to-a-web-service-on-google-kubernetes-engine-2d71849520d
+
+https://blog.container-solutions.com/kubernetes-deployment-strategies
+
+https://medium.com/google-cloud/kubernetes-best-practices-8d5cd03446e2
+
+https://stackoverflow.com/questions/22944631/how-to-get-the-ip-address-of-the-docker-host-from-inside-a-docker-container
+
+=== GKE
+
+https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity
+
+https://cloud.google.com/solutions/using-gcp-services-from-gke
+
+https://medium.com/redpoint/cost-effective-kubernetes-on-google-cloud-61067185ebe8
+
+https://rominirani.com/google-cloud-platform-factors-to-control-your-costs-5a256ed207f1?gi=e90cc7e943c8
+
+https://medium.com/google-cloud/kubernetes-day-one-30a80b5dcb29
+
+=== Cloud SQL Proxy
+
+https://stackoverflow.com/questions/41173305/multiple-k8s-containers-connecting-to-google-cloud-sql-through-proxy
+
+https://github.com/GoogleCloudPlatform/cloudsql-proxy/blob/master/Kubernetes.md
+
+https://severalnines.com/database-blog/running-proxysql-kubernetes-service
+
+https://cloud.google.com/sql/docs/mysql/connect-kubernetes-engine
+
+=== Symfony
+
+https://medium.com/@galopintitouan/how-to-build-a-scalable-symfony-application-on-kubernetes-30f23bf304e
+
+https://titouangalopin.com/introducing-the-official-flysystem-bundle/
+
+https://itnext.io/scaling-your-symfony-application-and-preparing-it-for-deployment-on-kubernetes-c102bf246a93
+
+https://medium.com/@joeymasip/how-to-create-an-api-with-symfony-4-and-jwt-b2334a8fbec2
+
+=== Mailer
+
+https://backbeat.tech/blog/sending-emails-with-symfony/
+
+https://symfony.com/doc/4.4/mailer.html
+
+https://github.com/cmaessen/docker-php-sendmail/blob/master/Dockerfile

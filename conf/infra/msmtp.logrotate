@@ -1,0 +1,7 @@
+/var/log/msmtp/*.log {
+  rotate 5
+  daily
+  compress
+  missingok
+  notifempty
+}

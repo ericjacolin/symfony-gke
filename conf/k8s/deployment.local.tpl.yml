@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ BRANCH }}-{{ PROJECT }}
+  labels:
+    app: {{ BRANCH }}-{{ PROJECT }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: {{ BRANCH }}-{{ PROJECT }}
+
+  template:
+    metadata:
+      labels:
+        app: {{ BRANCH }}-{{ PROJECT }}
+        branch: {{ BRANCH }}
+        tag: {{ TAG }}
+    spec:
+      containers:
+        - name: {{ BRANCH }}-{{ PROJECT }}-web
+          image: {{ BRANCH }}-{{ PROJECT }}-web:{{ TAG }}
+          env:
+            - name: APP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ BRANCH }}-{{ PROJECT }}-sf-secrets
+                  key: APP_SECRET
+            - name: MAILER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ BRANCH }}-{{ PROJECT }}-sf-secrets
+                  key: MAILER_PASSWORD
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ BRANCH }}-{{ PROJECT }}-sf-secrets
+                  key: DB_PASSWORD
+          ports:
+            - name: {{ BRANCH }}-{{ PROJECT }}
+              hostIP: 127.0.0.1
+              hostPort: {{ APACHE_LISTEN_PORT }}
+              containerPort: {{ APACHE_LISTEN_PORT }}
+          volumeMounts:
+            - name: {{ BRANCH }}-{{ PROJECT }}-var
+              mountPath: /var/www/var
+            # Only for local development
+            - name: {{ BRANCH }}-{{ PROJECT }}-data-public
+              mountPath: /var/www/data-public
+            - name: {{ BRANCH }}-{{ PROJECT }}-data-private
+              mountPath: /var/www/data-private
+            - name: {{ BRANCH }}-{{ PROJECT }}-sf
+              mountPath: /var/www/sf
+
+      volumes:
+        - name: {{ BRANCH }}-{{ PROJECT }}-var
+          emptyDir: {}
+        - name: {{ BRANCH }}-{{ PROJECT }}-data-public
+          hostPath:
+            path: {{ HOST_DATA_PUBLIC_DIR }}
+            type: Directory
+        - name: {{ BRANCH }}-{{ PROJECT }}-data-private
+          hostPath:
+            path: {{ HOST_DATA_PRIVATE_DIR }}
+            type: Directory
+        - name: {{ BRANCH }}-v-sf
+          hostPath:
+            path: {{ HOST_SF_DIR }}
+            type: Directory
