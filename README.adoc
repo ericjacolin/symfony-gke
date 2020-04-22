@@ -950,6 +950,12 @@ Create Database:
 
 * Character set/ Collation => `utf8mb4/ utf8mb4_unicode_ci`
 * Connectivity: Private IP
+* Set these flags, in order to be able to create stored procedures and functions:
+----
+log_bin_trust_function_creators	= on
+general_log = on
+log_output = FILE
+----
 
 Don't use the recommended collation for MySQL 8.0 `utf8mb4_0900_ai_ci` as it is
 not supported on MySQL 5.7.
