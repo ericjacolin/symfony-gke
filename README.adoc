@@ -1302,6 +1302,25 @@ kubectl apply -f build/service.yml
 kubectl apply -f build/cronjob.local.yml
 ----
 
+==== Deployments
+
+Build your Docker image, then generate and apply deployment manifests.
+This is usually done only once, unless you need to change your configuration files or
+Docker image.
+
+.In the local shell:
+[source,bash,subs=attributes+]
+----
+# Build image
+php vendor/bin/dep --file=conf/deployer/deploy-k8s.php --hosts=localhost deploy-local \
+    -o BRANCH=dev -o TAG=current
+# generate and apply deployment manifest
+kubectl config use-context minikube
+php vendor/bin/dep --file=conf/deployer/deploy-k8s.php --hosts=localhost gen-deployment \
+    -o BRANCH=dev -o TAG=current
+kubectl apply -f build/deployment.yml
+----
+
 ==== Releases
 
 The web application container mounts the Symfony working directory. There is no need
@@ -1371,6 +1390,18 @@ php vendor/bin/dep --file=conf/deployer/deploy-k8s.php \
     --hosts=remote gen-service -o BRANCH=master
 kubectl apply -f build/service.yml
 kubectl apply -f build/cronjob.remote.yml
+----
+
+==== Deployments
+
+Generate deployment manifests. This is usually done only once.
+
+.In the local shell:
+[source,bash,subs=attributes+]
+----
+kubectl config use-context gke_{GCP_PROJECT}_{GCP_ZONE}_{GKE_CLUSTER}
+php vendor/bin/dep --file=conf/deployer/deploy-k8s.php --hosts=remote gen-deployment \
+    -o BRANCH=dev -o TAG=0.1.2
 ----
 
 ==== Releases

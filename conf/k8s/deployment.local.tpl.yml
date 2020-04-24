@@ -65,7 +65,7 @@ spec:
           hostPath:
             path: {{ HOST_DATA_PRIVATE_DIR }}
             type: Directory
-        - name: {{ BRANCH }}-v-sf
+        - name: {{ BRANCH }}-{{ PROJECT }}-sf
           hostPath:
             path: {{ HOST_SF_DIR }}
             type: Directory

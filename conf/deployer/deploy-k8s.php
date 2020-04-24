@@ -34,8 +34,11 @@ namespace Deployer;
     php vendor/bin/dep --file=conf/deployer/deploy-k8s.php --hosts=remote gen-deployment \
         -o BRANCH=dev -o TAG=0.1.2
 
-    3. Deploy new container version (new release, only remotely):
+    3. Deploy new container version:
     ----
+    Local: execute in the local shell: (usually done once, at the beginning)
+    php vendor/bin/dep --file=conf/deployer/deploy-k8s.php --hosts=localhost deploy-local \
+        -o BRANCH=dev -o TAG=current
     Remote: execute in the Cloud shell:
     php vendor/bin/dep --file=conf/deployer/deploy-k8s.php --hosts=remote deploy-remote \
         -o BRANCH=dev -o TAG=0.1.2
