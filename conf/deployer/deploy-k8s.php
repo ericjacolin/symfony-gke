@@ -303,7 +303,7 @@ task('remote:git-clean-up', function () {
 /*
     Common build function
     Build docker-compose resources locally
-    Generates a /build folder locally with the resources needed to execute docker-compose
+    Generates a /build folder locally with the resources needed by the Docker build
 */
 task('docker-resources', [
     'docker-build:env-file',
@@ -311,8 +311,7 @@ task('docker-resources', [
 ]);
 
 /*
-    Build docker .env file locally (on deployment host)
-    + copy .env file into the SF root folder
+    Build docker .env file and copy .env file into the Symfony root folder
 */
 task('docker-build:env-file', function () {
     cd("{{ ROOT_DIR }}");

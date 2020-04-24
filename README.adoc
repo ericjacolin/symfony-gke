@@ -45,6 +45,7 @@ How to use it:
 * Customize `sf/composer.json` if needed and install
 * Adapt the `conf/env` files to your environments
 * Adapt the `docs/README.config.adoc` files to your project configuration
+* Set the `COMPOSE_PROJECT_NAME` variable in `conf/deployer/deploy-k8s.php`
 * Start developing your Symfony application
 
 === Principles
@@ -258,7 +259,9 @@ The folder structure is as follows:
 |Container configuration file templates
 |Apache, PHP, msmtp +
 Docker images include the `dockerize` script, which substitutes environment
-variables at container build time
+variables at container build time +
+You can add stuff here (e.g. GeoLite2 data), all the content of the `/infra` folder
+is available to your Docker build process
 
 |`{nbsp}{nbsp}{nbsp}{vbar}-- k8s`
 |Kubernetes manifest templates: service, deployment, cronjob
