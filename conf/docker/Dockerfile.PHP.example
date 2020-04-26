@@ -32,6 +32,8 @@ RUN apt-get update \
     # imagemagick
     && apt-get install -y --force-yes \
         libmagickwand-dev --no-install-recommends \
+        # Inkscape is needed if you want to read SVG files created by Inkscape
+        inkscape \
         && pecl install imagick-3.4.4 \
         && docker-php-ext-enable imagick \
     # imap
