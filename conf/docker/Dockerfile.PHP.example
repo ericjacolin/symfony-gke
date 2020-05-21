@@ -3,8 +3,10 @@
 RUN apt-get update \
     # generic libraries
     && apt-get install -y \
+        curl \
         libssl-dev \
         libxml2-dev \
+        libyaml-dev \
     # PHP modules
     && docker-php-ext-install \
         exif \
@@ -32,8 +34,6 @@ RUN apt-get update \
     # imagemagick
     && apt-get install -y --force-yes \
         libmagickwand-dev --no-install-recommends \
-        # Inkscape is needed if you want to read SVG files created by Inkscape
-        inkscape \
         && pecl install imagick-3.4.4 \
         && docker-php-ext-enable imagick \
     # imap
@@ -42,6 +42,8 @@ RUN apt-get update \
     # xslt
     && apt-get install -y libxslt-dev \
         && docker-php-ext-install xsl \
+    # YAML extension
+    && pecl install yaml-2.0.4 && echo "extension=yaml.so" > /usr/local/etc/php/conf.d/ext-yaml.ini \
     # zip
     && apt-get install -y \
         libzip-dev \

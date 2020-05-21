@@ -892,6 +892,15 @@ gcloud compute scp ~ my-vm-name:/tmp
 gcloud compute scp my-vm-name:/tmp ~
 ----
 
+After updating your local `gcloud` libraries, you may encounter permission problems. 
+Run this:
+
+.In the local shell:
+[source,bash]
+----
+sudo chown -R $USER ~/.config/gcloud
+----
+
 === Web Proxy
 
 For a simple project or MVP one can deploy an Apache web proxy server on a free tier Compute Engine
