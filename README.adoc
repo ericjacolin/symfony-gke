@@ -702,6 +702,44 @@ To that effect the `var` directory is mounted externally on the container.
 
 PHP sessions are saved in the `/tmp` folder inside the container.
 
+=== Logging
+
+Here we describe how each type of application log  is handled.
+
+[cols="1,2,2", options="header"]
+|===
+|Log type
+|Handling
+|Comments
+
+|Apache logs
+|In the container access.log and error.log are symlinked to stdout. This log is available to
+Kubernetes log viewer. You can export it to Stackdriver
+|One may want to turn off the access.log which is quite verbose, and redundant with Google Analytics.
+To that effect add a `RUN rm /var/log/apache2/access.log` instruction in the Dockerfile
+
+|PHP error log
+|Stored on an emptyDir volume
+|Normally not used often, as most errors will be captured by the Symfony log
+
+|Symfony log
+|Monolog logging locally + sending emails via SwiftMailer (Monolog not yet integrated to Mailer)
+|Monolog supports many other transports, including Elasticsearch, Redis, syslog, Slack
+
+|msmtp
+|Stored on an emptyDir volume
+|Normally not used often. Mostly errors connecting to the remote SMTP server, which are not
+interesting.
+|===
+
+Note: symlinking log files (PHP, msmtp, etc) to `/proc/1/fd/1` (the stdout of the container's PID 1 process,
+in this case the `tini` init) usually does not work due to a permission problem.
+Other processes can not write into it.
+
+A better, more robust solution would be to syslog these files to a collector in another container.
+
+See the Symfony documentation for a configuration of Monolog to send alerts by email using SwiftMailer.
+
 === Commands
 
 These commands are useful for debugging purposes. Run them from inside the container shell.
@@ -892,7 +930,7 @@ gcloud compute scp ~ my-vm-name:/tmp
 gcloud compute scp my-vm-name:/tmp ~
 ----
 
-After updating your local `gcloud` libraries, you may encounter permission problems. 
+After updating your local `gcloud` libraries, you may encounter permission problems.
 Run this:
 
 .In the local shell:

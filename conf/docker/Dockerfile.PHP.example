@@ -16,6 +16,10 @@ RUN apt-get update \
         pdo_mysql \
         soap \
         wddx \
+    # APCu
+    && echo '' | pecl install apcu-5.1.18 \
+        && docker-php-ext-enable apcu \
+        && echo "extension=apcu.so" > /usr/local/etc/php/php.ini \
     # Composer
     && curl -sS https://getcomposer.org/installer \
         | php -- --install-dir=/usr/bin/ --filename=composer \

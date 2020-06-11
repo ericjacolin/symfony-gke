@@ -76,11 +76,17 @@ ENV PHP_ERROR_REPORTING $PHP_ERROR_REPORTING
 # To allow SF to write to var/cache and log on mounted volumes
 RUN usermod -u 1000 www-data
 
+# Add Tini
+ENV TINI_VERSION v0.19.0
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /tini
+RUN chmod +x /tini
+ENTRYPOINT ["/tini", "--", "docker-php-entrypoint"]
+
 #CMD ["apachectl", "-D", "FOREGROUND"]
-CMD dockerize \
-    -template /usr/local/etc/php/php.ini.tpl:/usr/local/etc/php/php.ini \
-    -template /etc/php/7.3/apache2/php.ini.tpl:/etc/php/7.3/apache2/php.ini \
-    -template /etc/apache2/sites-enabled/virtual-host.conf.tpl:/etc/apache2/sites-enabled/virtual-host.conf \
-    -template /etc/apache2/ports.conf.tpl:/etc/apache2/ports.conf \
-    -template /etc/msmtprc.tpl:/etc/msmtprc \
-    apachectl -D FOREGROUND
+CMD ["dockerize", \
+    "-template", "/usr/local/etc/php/php.ini.tpl:/usr/local/etc/php/php.ini", \
+    "-template", "/etc/php/7.3/apache2/php.ini.tpl:/etc/php/7.3/apache2/php.ini", \
+    "-template", "/etc/apache2/sites-enabled/virtual-host.conf.tpl:/etc/apache2/sites-enabled/virtual-host.conf", \
+    "-template", "/etc/apache2/ports.conf.tpl:/etc/apache2/ports.conf", \
+    "-template", "/etc/msmtprc.tpl:/etc/msmtprc", \
+    "apachectl", "-D", "FOREGROUND"]
