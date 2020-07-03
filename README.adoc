@@ -1055,12 +1055,12 @@ FLUSH PRIVILEGES;
 
 ==== Application service account
 
-Create a `{PROJECT}-dev` Cloud IAM service account for the application. Add roles:
+Create a `{PROJECT}` Cloud IAM service account for the application. Add roles:
 
 * Storage > Storage Object Admin
 * Cloud SQL > Cloud SQL Client
 
-The service account is named `{PROJECT}-dev@{GCP_PROJECT}.iam.gserviceaccount.com`
+The service account is named `{PROJECT}@{GCP_PROJECT}.iam.gserviceaccount.com`
 
 Create a JSON key associated to this account => `{GCP_PROJECT}-abcdef123456.json`.
 
@@ -1090,6 +1090,12 @@ apt-get update && apt-get install -y mysql-client-5.7
 # test the connection
 mysql -u root -p -h cloudsql-proxy:3306 {PROJECT}_dev
 ----
+
+This service account must be given the following Cloud Storage permissions on buckets:
+
+* Storage Object Admin
+* Storage Object Creator
+* Storage Object Viewer
 
 ==== Import a database
 
