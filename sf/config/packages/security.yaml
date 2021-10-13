@@ -1,0 +1,62 @@
+security:
+    providers:
+        db:
+            entity:
+                class: App\Entity\User
+                property: email
+    firewalls:
+        # for the time being, completely open API resources
+        api:
+            pattern:  ^/api
+            stateless: true
+            anonymous: true
+            security: false
+
+        # disables authentication for assets and the profiler, adapt it according to your needs
+        dev:
+            pattern: ^/(_(profiler|wdt)|css|images|js)/
+            security: false
+
+        main:
+            anonymous: true
+            lazy: true
+            provider: db
+            form_login:
+                login_path: /
+                check_path: /login
+                username_parameter: _email
+                password_parameter: _password
+                success_handler: App\Security\AuthenticationSuccessHandler
+                failure_handler: App\Security\AuthenticationFailureHandler
+            logout:
+                path:   /logout
+                invalidate_session: true
+            remember_me:
+                secret: '%env(APP_SECRET)%'
+                path: /
+                always_remember_me: true
+            switch_user: { role: ROLE_ADMIN, parameter: _su }
+            user_checker: App\Security\UserChecker
+            # guard:
+            #     authenticators:
+            #         - App\Security\PasswordResetAuthenticator
+            #provider: users_in_memory
+
+    # Order is critical: first matched URL applies, so order by more specific first
+    access_control:
+        # Admin section
+        - { path: '^/admin/', roles: [ROLE_ADMIN] }
+        - { path: '^/admin', roles: [IS_AUTHENTICATED_ANONYMOUSLY] }
+        # User section
+        - { path: '^/user/', roles: [ROLE_CLIENTUSER] }
+        - { path: '^/user', roles: [IS_AUTHENTICATED_ANONYMOUSLY] }
+        # Home page
+        - { path: '^/', roles: [IS_AUTHENTICATED_ANONYMOUSLY] }
+            # https://symfony.com/doc/current/security.html#firewalls-authentication
+    role_hierarchy:
+        ROLE_CLIENTADMIN: [ROLE_CLIENTUSER]
+            # https://symfony.com/doc/current/security/impersonating_user.html
+            # switch_user: true
+    encoders:
+        App\Entity\User:
+            algorithm: auto

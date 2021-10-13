@@ -1,17 +1,28 @@
 defaults
+
+logfile        /var/log/msmtp/msmtp.log
+
+# OVH
+account        ovh
+host           ssl0.ovh.net
+auth           on
+port           465
+from           info@myproject.info
+user           eric@myproject.info
+passwordeval   "echo $MAILER_PASSWORD"
 auth           on
 tls            on
 tls_trust_file /etc/ssl/certs/ca-certificates.crt
-logfile        /var/www/var/log/msmtp.log
+# https://wiki.archlinux.org/index.php/msmtp#Server_sent_empty_reply
+tls_starttls   off
 
-# Your mail provider here
-account        ovh
-host           pro1.mail.ovh.net
-auth           on
-port           587
-from           support@myproject.com
-user           support@myproject.com
-passwordeval   "echo $MAILER_PASSWORD"
+# mailcatcher (local)
+account         mailcatcher
+host            10.0.2.2
+port            1025
+from            dummy@myproject.info
+auth            off
+tls             off
 
 # Set a default account
-account default : ovh
+account default : {{ .Env.SMTP_ACCOUNT }}

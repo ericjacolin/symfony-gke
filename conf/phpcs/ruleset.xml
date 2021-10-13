@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<ruleset name="Eric">
+    <description>Eric's custom coding standard.</description>
+    <rule ref="PSR12">
+        <exclude name="PSR12.Operators.OperatorSpacing.NoSpaceBefore"/>
+        <exclude name="PSR12.Operators.OperatorSpacing.NoSpaceAfter"/>
+        <exclude name="PSR2.Methods.FunctionCallSignature.MultipleArguments"/>
+        <exclude name="PSR12.Files.FileHeader.SpacingInsideBlock"/>
+        <exclude name="Squiz.WhiteSpace.ControlStructureSpacing.SpacingAfterOpen"/>
+        <exclude name="Squiz.WhiteSpace.ControlStructureSpacing.SpacingBeforeClose"/>
+        <exclude name="Generic.Files.LineLength.TooLong"/>
+    </rule>
+</ruleset>

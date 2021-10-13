@@ -1,0 +1,5 @@
+framework:
+    mailer:
+        transports:
+            #main: '%env(MAILER_DSN)%'
+            realtime_mailer: 'null://default'

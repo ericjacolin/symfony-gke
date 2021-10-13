@@ -1,0 +1,31 @@
+version: '3.7'
+
+services:
+
+    phpunit:
+        build:
+            context: .
+            dockerfile: conf/docker/Dockerfile.phpunit
+        restart: "no"
+        volumes:
+            - "/projects/myproject/sf:/var/www/sf"
+            - "/storage/myproject:/var/www/local-storage"
+        network_mode: "host"
+
+    composer:
+        build:
+            context: .
+            dockerfile: conf/docker/Dockerfile.composer
+        restart: "no"
+        volumes:
+            - "/projects/myproject/sf:/var/www/sf"
+        network_mode: "host"
+
+    phpcs:
+        build:
+            context: .
+            dockerfile: conf/docker/Dockerfile.phpcs
+        restart: "no"
+        volumes:
+            - "/projects/myproject:/project"
+        network_mode: "host"

@@ -1,0 +1,76 @@
+FROM ubuntu:20.04
+
+# To avoid interactive install for git
+ARG DEBIAN_FRONTEND=noninteractive
+# Git credentials
+ARG GITHUB_SSH_KEY
+ENV GITHUB_SSH_KEY $GITHUB_SSH_KEY
+# Application build parameters
+ARG TAG
+ENV TAG $TAG
+ARG APP_ENV
+ENV APP_ENV $APP_ENV
+ARG HOST_ENV
+ENV HOST_ENV $HOST_ENV
+
+# Build tools
+RUN apt-get update \
+    && apt-get install -y \
+        curl \
+        git \
+        libssl-dev \
+        libxml2-dev \
+        nano \
+        php-apcu \
+        php-cli \
+        php-curl \
+        php-xml \
+        php-zip \
+        unzip \
+        wget
+
+WORKDIR /root
+
+# Clone the Github repo (ADAPT)
+COPY infra/ssh_config .ssh/config
+RUN chmod 600 .ssh/config
+RUN echo "${GITHUB_SSH_KEY}" > .ssh/id_rsa
+RUN chmod 400 .ssh/id_rsa
+RUN git clone git@github.com:<git account>/<git repo>.git
+
+# Fetch the version tag to build
+WORKDIR /root/project
+RUN git fetch --all --tags --prune \
+    && git checkout tags/${TAG}
+
+# Copy Symfony application files
+RUN mkdir -p /var/www/sf
+WORKDIR /root/project/sf
+RUN cp -r -t /var/www/sf \
+    bin \
+    config \
+    public \
+    src \
+    templates \
+    translations \
+    composer.json \
+    composer.lock \
+    symfony.lock
+COPY .env /var/www/sf/.env
+
+# Campaign email template workaround - TECHNICAL DEBT
+RUN mkdir -p /var/www/sf/templates/email/campaign
+
+# Composer update
+WORKDIR /root
+RUN wget -O composer-setup.php https://getcomposer.org/installer \
+    && php composer-setup.php --install-dir=/usr/local/bin --filename=composer
+WORKDIR /var/www/sf
+RUN composer update --no-scripts
+
+RUN mkdir -p /var/www/cache \
+    && env DB_PASSWORD="dummy" \
+        API_KEY="dummy" \
+        APP_SECRET="dummy" \
+        MAILER_PASSWORD="dummy" \
+        /var/www/sf/bin/console cache:warmup --env=${APP_ENV}

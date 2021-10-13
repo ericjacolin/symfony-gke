@@ -1,0 +1,6 @@
+security:
+    encoders:
+        App\Entity\User:
+            # Faster login for tests
+            cost: 4
+            algorithm: auto

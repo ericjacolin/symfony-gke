@@ -1,0 +1,7 @@
+framework:
+    mailer:
+        transports:
+            #main: '%env(MAILER_DSN)%'
+            #realtime_mailer: 'sendmail://localhost'
+            # Uses the sendmail binary and options configured in the sendmail_path setting of php.ini
+            realtime_mailer: 'native://default'

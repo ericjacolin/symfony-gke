@@ -1,0 +1,65 @@
+FROM php:7.4-cli
+LABEL maintainer=
+
+# Install PHP modules
+RUN apt-get update \
+    # generic libraries
+    && apt-get install -y \
+        curl \
+        libssl-dev \
+        libxml2-dev \
+        libyaml-dev \
+        nano \
+    # PHP modules
+    && docker-php-ext-install \
+        exif \
+        gettext \
+        intl \
+        pdo_mysql \
+    # APCu
+    && echo '' | pecl install apcu-5.1.18 \
+        && docker-php-ext-enable apcu \
+        && echo "extension=apcu.so" > /usr/local/etc/php/php.ini \
+    # gd
+    && apt-get install -y \
+        libfreetype6-dev \
+        libjpeg62-turbo-dev \
+        libpng-dev \
+    && docker-php-ext-configure gd \
+        --with-freetype \
+        --with-jpeg \
+        && docker-php-ext-install -j$(nproc) gd \
+    # HTMLdoc
+    && apt-get install -y htmldoc \
+    # imagemagick
+    && apt-get install -y --force-yes \
+        libmagickwand-dev --no-install-recommends \
+        # Inkscape is needed if you want to read SVG files created by Inkscape
+        inkscape \
+        && pecl install imagick-3.4.4 \
+        && docker-php-ext-enable imagick \
+    # imap
+    && apt-get install -y libc-client-dev libkrb5-dev \
+        && docker-php-ext-configure imap --with-kerberos --with-imap-ssl \
+    # xslt
+    && apt-get install -y libxslt-dev \
+        && docker-php-ext-install xsl \
+    # YAML extension
+    && pecl install yaml-2.0.4 && echo "extension=yaml.so" > /usr/local/etc/php/conf.d/ext-yaml.ini \
+    # zip
+    && apt-get install -y \
+        libzip-dev \
+        zip \
+        && docker-php-ext-install zip \
+    # Purge apt
+    && apt-get clean -y && apt-get autoclean -y && apt-get autoremove -y \
+        && rm -rf /var/lib/apt/lists/*
+
+# Geolite2 data file
+COPY conf/docker/files/geolite2/GeoLite2-Country.mmdb /usr/local/share/geolite2/GeoLite2-Country.mmdb
+
+# Install Composer
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+WORKDIR "/var/www/sf"
+ENTRYPOINT ["./bin/phpunit"]

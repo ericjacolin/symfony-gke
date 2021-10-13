@@ -1,0 +1,19 @@
+#index:
+#    path: /
+#    controller: App\Controller\DefaultController::index
+
+login:
+    path: /login
+    controller: App\Controller\DefaultController::homeAction
+
+logout:
+    path: /logout
+
+
+# Static content pages
+
+#static_tandc:
+#    path: /tandc
+#    defaults:
+#        _controller: FrameworkBundle:Template:template
+#        template: static/tandc.html.twig

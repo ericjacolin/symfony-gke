@@ -1,13 +1,12 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ BRANCH }}-{{ PROJECT }}
+  name: {{ PROJECT }}-{{ APP_ENV }}
   labels:
-    app: {{ BRANCH }}-{{ PROJECT }}
+    app: {{ PROJECT }}-{{ APP_ENV }}
 spec:
-  type: NodePort
+  type: ClusterIP
   ports:
-    - port: {{ APACHE_LISTEN_PORT }}
-      targetPort: {{ APACHE_LISTEN_PORT }}
+    - port: 80
   selector:
-    app: {{ BRANCH }}-{{ PROJECT }}
+    app: {{ PROJECT }}-{{ APP_ENV }}

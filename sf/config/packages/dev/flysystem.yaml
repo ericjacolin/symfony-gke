@@ -1,0 +1,10 @@
+flysystem:
+    storages:
+        storage.private.local:
+            adapter: 'local'
+            options:
+                directory: '%kernel.project_dir%/../local-storage/%env(GCS_PRIVATE_BUCKET)%'
+        storage.public.local:
+            adapter: 'local'
+            options:
+                directory: '%kernel.project_dir%/../local-storage/%env(GCS_PUBLIC_BUCKET)%'

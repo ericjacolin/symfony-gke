@@ -1,0 +1,106 @@
+# This file is the entry point to configure your own services.
+# Files in the packages/ subdirectory configure your dependencies.
+
+# Put parameters here that don't need to change on each machine where the app is deployed
+# https://symfony.com/doc/current/best_practices/configuration.html#application-related-configuration
+parameters:
+    # Symfony standard
+    httpProtocol: '%env(ROUTER_REQUEST_CONTEXT_SCHEME)%'
+    locale: 'en'
+    router.request_context.host: '%env(ROUTER_REQUEST_CONTEXT_HOST)%'
+    router.request_context.scheme: '%env(ROUTER_REQUEST_CONTEXT_SCHEME)%'
+    secret: '%env(APP_SECRET)%'
+    api_key: '%env(API_KEY)%'
+    email_from: '%env(EMAIL_FROM)%'
+
+    # Storage
+    storage.public.adapter: '%env(STORAGE_PUBLIC_ADAPTER)%'
+    storage.private.adapter: '%env(STORAGE_PRIVATE_ADAPTER)%'
+    storage_adapter: '%env(STORAGE_ADAPTER)%'
+    cdn_url: '%env(CDN_URL)%'
+    cdn_url_from_cluster: '%env(CDN_URL_FROM_CLUSTER)%'
+
+    # App custom
+    page_size: 10
+
+    # asset cache busting
+    asset_v: '20200907'
+
+services:
+    # default configuration for services in *this* file
+    _defaults:
+        autowire: true      # Automatically injects dependencies in your services.
+        autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
+        public: false       # Allows optimizing the container by removing unused services; this also means
+                            # fetching services directly from the container via $container->get() won't work.
+                            # The best practice is to be explicit about your dependencies anyway.
+        bind:
+            $projectDir: '%kernel.project_dir%'
+            $api_key: '%api_key%'
+            $email_from: '%email_from%'
+#            $mailer_batch: '@mailer.messenger.batch'
+#            $mailer_realtime: '@mailer.messenger.realtime'
+
+    # makes classes in src/ available to be used as services
+    # this creates a service per class whose id is the fully-qualified class name
+    App\:
+        resource: '../src/*'
+        exclude: '../src/{DependencyInjection,Entity,Migrations,Tests,Kernel.php}'
+
+    # controllers are imported separately to make sure services can be injected
+    # as action arguments even if you don't extend any base controller class
+    App\Controller\:
+        resource: '../src/Controller'
+        tags: ['controller.service_arguments']
+
+    # add more service definitions when explicit configuration is needed
+    # please note that last definitions always *replace* previous ones
+
+    # Success handler after authentication - sets session variables user, user_name, company, company_name, log audit event
+    App\Security\AuthenticationSuccessHandler: ~
+
+    # Failure handler after authentication - log audit event
+    App\Security\AuthenticationFailureHandler: ~
+
+    # Logout event listener
+    App\EventListener\LogoutListener:
+        tags:
+            - name: 'kernel.event_listener'
+              event: 'Symfony\Component\Security\Http\Event\LogoutEvent'
+              dispatcher: security.event_dispatcher.main
+
+    # Authentication event listener
+    App\EventListener\AuthenticationListener:
+        tags:
+            - { name: kernel.event_listener, event: security.authentication.failure, method: onAuthenticationFailure }
+            - { name: kernel.event_listener, event: security.interactive_login, method: onAuthenticationSuccess }
+
+    # Switch user event listener
+    App\EventListener\SwitchUserListener:
+        tags:
+            - { name: kernel.event_listener, event: security.switch_user, method: onSwitchUser }
+
+    # To manually create a RememberMe cookie after programmatic login
+    Symfony\Component\Security\Http\RememberMe\TokenBasedRememberMeServices:
+        public: true
+        arguments:
+            - ['@security.authentication_utils']
+            - '%env(APP_SECRET)%'
+            - 'db'
+            - { name: 'REMEMBERME', lifetime: 31536000, path: '/', domain: ~, always_remember_me: true, remember_me_parameter: '_remember_me' }
+#        'name' => 'REMEMBERME',
+#        'lifetime' => 31536000,
+#        'path' => '/',
+#        'domain' => null,
+#        'secure' => false,
+#        'httponly' => true,
+#        'always_remember_me' => false,
+#        'remember_me_parameter' => '_remember_me',
+
+    # user_update.listener:
+    App\EventListener\UserUpdateListener:
+        tags:
+            - { name: doctrine.event_listener, event: preUpdate }
+
+    # Google Cloud storage (Flysystem)
+    Google\Cloud\Storage\StorageClient: ~

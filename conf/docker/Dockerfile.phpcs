@@ -1,0 +1,26 @@
+FROM php:7.4-cli
+
+LABEL maintainer=
+
+ENV PHPCS_VERSION=3.5.8
+
+RUN apt-get update \
+    && apt-get install -y \
+        curl \
+        git \
+    # zip
+    && apt-get install -y \
+        libzip-dev \
+        zip \
+        && docker-php-ext-install zip \
+    # Clean up
+    && apt-get clean && \
+    rm -rf /var/lib/lists/*
+
+RUN curl -L https://github.com/squizlabs/PHP_CodeSniffer/releases/download/$PHPCS_VERSION/phpcs.phar > /usr/local/bin/phpcs \
+    && chmod +x /usr/local/bin/phpcs
+
+WORKDIR "/project"
+
+ENTRYPOINT ["phpcs"]
+CMD ["--version"]

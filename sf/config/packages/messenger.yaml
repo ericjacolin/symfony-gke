@@ -1,0 +1,17 @@
+framework:
+    messenger:
+        # Uncomment this (and the failed transport below) to send failed messages to this transport for later handling.
+        failure_transport: failed
+
+        transports:
+            # https://symfony.com/doc/current/messenger.html#transport-configuration
+            failed: 'doctrine://default?queue_name=failed'
+            # async: '%env(MESSENGER_TRANSPORT_DSN)%'
+            # sync: 'sync://'
+            batch_mailer: 'doctrine://default?queue_name=batch_mailer'
+            realtime_mailer: 'doctrine://default?queue_name=realtime_mailer'
+
+        routing:
+            # Route your messages to the transports
+            'Symfony\Component\Mailer\Messenger\SendEmailMessage':  realtime_mailer
+            # 'App\Message\YourMessage': async

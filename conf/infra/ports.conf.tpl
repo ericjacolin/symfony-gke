@@ -1,1 +1,0 @@
-LISTEN *:{{ .Env.APACHE_LISTEN_PORT }}

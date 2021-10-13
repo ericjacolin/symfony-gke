@@ -2,51 +2,61 @@
     "type": "project",
     "license": "proprietary",
     "require": {
-        "php": "^7.2",
+        "php": "^7.4",
         "ext-ctype": "*",
         "ext-iconv": "*",
         "craue/formflow-bundle": "~3.2",
         "geoip2/geoip2": "~2.0",
-        "league/flysystem-bundle": "*",
-        "propaganistas/email-obfuscator": "~1.0",
+        "laminas/laminas-code": "^3.4",
+        "laminas/laminas-escaper": "^2.6",
+        "laminas/laminas-eventmanager": "^3.2",
+        "league/flysystem-bundle": "^1.5",
+        "mossadal/math-parser": "^1.3",
+        "phpoffice/phpword": "^0.17.0",
+        "ramsey/uuid-doctrine": "^1.6",
         "sensio/framework-extra-bundle": "^5.1",
-        "superbalist/flysystem-google-storage": "*",
-        "symfony/asset": "4.4.*",
-        "symfony/console": "4.4.*",
-        "symfony/dotenv": "4.4.*",
-        "symfony/expression-language": "4.4.*",
+        "superbalist/flysystem-google-storage": "^7.2",
+        "symfony/asset": "5.2.*",
+        "symfony/console": "5.2.*",
+        "symfony/dotenv": "5.2.*",
+        "symfony/expression-language": "5.2.*",
         "symfony/flex": "^1.1",
-        "symfony/form": "4.4.*",
-        "symfony/framework-bundle": "4.4.*",
-        "symfony/mailer": "4.4.*",
-        "symfony/messenger": "4.4.*",
+        "symfony/form": "5.2.*",
+        "symfony/framework-bundle": "5.2.*",
+        "symfony/intl": "5.2.*",
+        "symfony/mailer": "5.2.*",
+        "symfony/messenger": "5.2.*",
         "symfony/monolog-bundle": "^3.1",
-        "symfony/orm-pack": "*",
-        "symfony/process": "4.4.*",
-        "symfony/profiler-pack": "^1.0",
-        "symfony/security-bundle": "4.4.*",
-        "symfony/serializer-pack": "*",
-        "symfony/translation": "4.4.*",
-        "symfony/twig-bundle": "4.4.*",
-        "symfony/validator": "4.4.*",
-        "symfony/web-link": "4.4.*",
-        "symfony/yaml": "4.4.*",
-        "twig/extensions": "*",
-        "ua-parser/uap-php": "@dev",
-        "view-components/grids": "*"
+        "symfony/orm-pack": "^2.1",
+        "symfony/process": "5.2.*",
+        "symfony/security-bundle": "5.2.*",
+        "symfony/serializer-pack": "^1.0",
+        "symfony/translation": "5.2.*",
+        "symfony/twig-bundle": "5.2.*",
+        "symfony/uid": "5.2.*",
+        "symfony/validator": "5.2.*",
+        "symfony/web-link": "5.2.*",
+        "symfony/yaml": "5.2.*",
+        "twig/cssinliner-extra": "^3.0",
+        "twig/extra-bundle": "^3.0",
+        "ua-parser/uap-php": "^3.9"
     },
     "require-dev": {
+        "dama/doctrine-test-bundle": "^6.5",
         "symfony/debug-pack": "*",
         "symfony/maker-bundle": "^1.0",
+        "symfony/phpunit-bridge": "^5.2",
         "symfony/profiler-pack": "*",
-        "symfony/test-pack": "*",
-        "symfony/webpack-encore-bundle": "^1.0"
+        "symfony/test-pack": "*"
     },
     "config": {
         "preferred-install": {
             "*": "dist"
         },
-        "sort-packages": true
+        "sort-packages": true,
+        "platform": {
+            "php": "7.4"
+        }
     },
     "autoload": {
         "psr-4": {
@@ -61,7 +71,8 @@
     "scripts": {
         "auto-scripts": {
             "cache:clear": "symfony-cmd",
-            "assets:install --symlink --relative %PUBLIC_DIR%": "symfony-cmd"
+            "assets:install --symlink --relative %PUBLIC_DIR%": "symfony-cmd",
+            "assets:install %PUBLIC_DIR%": "symfony-cmd"
         },
         "post-install-cmd": [
             "@auto-scripts"
@@ -76,7 +87,8 @@
     "extra": {
         "symfony": {
             "id": "01C0DG6SEZ39ABT6Y5YM8T4HNA",
-            "allow-contrib": false
+            "allow-contrib": false,
+            "require": "5.2.*"
         }
     }
 }

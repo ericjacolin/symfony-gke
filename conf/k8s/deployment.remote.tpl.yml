@@ -1,52 +1,81 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ BRANCH }}-{{ PROJECT }}
+  name: {{ PROJECT }}-{{ APP_ENV }}
   labels:
-    app: {{ BRANCH }}-{{ PROJECT }}
+    app: {{ PROJECT }}-{{ APP_ENV }}
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app: {{ BRANCH }}-{{ PROJECT }}
+      app: {{ PROJECT }}-{{ APP_ENV }}
 
   template:
     metadata:
       labels:
-        app: {{ BRANCH }}-{{ PROJECT }}
-        branch: {{ BRANCH }}
-        tag: {{ TAG }}
+        app: {{ PROJECT }}-{{ APP_ENV }}
+        APP_ENV: {{ APP_ENV }}
+        tag: "{{ TAG }}"
     spec:
+
+      initContainers:
+        - name: {{ PROJECT }}-{{ APP_ENV }}-webinit
+          image: gcr.io/{{ GCP_PROJECT_ID }}/{{ PROJECT }}-{{ APP_ENV }}-webinit:{{ TAG }}
+          command:
+            - "/bin/sh"
+            - "-c"
+            - |
+              cp -r /var/www/sf/* /sf \
+              && cp -r /var/www/sf/.env /sf/.env \
+              && cp -r /var/www/cache/* /cache \
+              && chown -R 1000:33 /cache \
+              && chown -R 1000:33 /sf
+#              && chmod 0777 /sf/templates/email/campaign \
+          volumeMounts:
+            - name: sf
+              mountPath: /sf
+            - name: cache
+              mountPath: /cache
+
       containers:
-        - name: {{ BRANCH }}-{{ PROJECT }}-web
-          image: gcr.io/{{ GCP_PROJECT_ID }}/{{ BRANCH }}-{{ PROJECT }}-web:{{ TAG }}
+        - name: {{ PROJECT }}-{{ APP_ENV }}-web
+          image: gcr.io/{{ GCP_PROJECT_ID }}/{{ PROJECT }}-{{ APP_ENV }}-web:{{ TAG }}
           env:
-            - name: APP_SECRET
+            - name: SYMFONY_DECRYPTION_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ BRANCH }}-{{ PROJECT }}-sf-secrets
-                  key: APP_SECRET
+                  name: {{ PROJECT }}-{{ APP_ENV }}-sf-secrets
+                  key: SYMFONY_DECRYPTION_SECRET
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ PROJECT }}-{{ APP_ENV }}-sf-secrets
+                  key: API_KEY
             - name: MAILER_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ BRANCH }}-{{ PROJECT }}-sf-secrets
+                  name: {{ PROJECT }}-{{ APP_ENV }}-sf-secrets
                   key: MAILER_PASSWORD
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ BRANCH }}-{{ PROJECT }}-sf-secrets
-                  key: DB_PASSWORD
           ports:
-            - name: {{ BRANCH }}-{{ PROJECT }}
-              hostIP: 127.0.0.1
-              hostPort: {{ APACHE_LISTEN_PORT }}
-              containerPort: {{ APACHE_LISTEN_PORT }}
+            - name: {{ PROJECT }}-{{ APP_ENV }}
+              containerPort: 80
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "250m"
           volumeMounts:
-            - name: {{ BRANCH }}-{{ PROJECT }}-var
-              mountPath: /var/www/var
+            - name: sf
+              mountPath: /var/www/sf
+            - name: cache
+              mountPath: /var/www/cache
 
       volumes:
-        - name: {{ BRANCH }}-{{ PROJECT }}-var
+        - name: sf
+          emptyDir: {}
+        - name: cache
           emptyDir: {}

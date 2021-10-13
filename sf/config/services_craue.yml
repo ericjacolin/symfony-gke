@@ -1,0 +1,10 @@
+# Separate file to avoid _defaults.bind error when calling a parent class as _defaults apply at file level
+services:
+    # Craue multi-page form
+    App\Form\SomeEntity\SomeFlow:
+        autowire: true
+        autoconfigure: false
+        public: true
+        parent: craue.form.flow
+        tags:
+            -  { name: form.type }

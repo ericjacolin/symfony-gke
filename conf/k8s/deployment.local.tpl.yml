@@ -1,71 +1,64 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ BRANCH }}-{{ PROJECT }}
+  name: {{ PROJECT }}-{{ APP_ENV }}
   labels:
-    app: {{ BRANCH }}-{{ PROJECT }}
+    app: {{ PROJECT }}-{{ APP_ENV }}
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app: {{ BRANCH }}-{{ PROJECT }}
+      app: {{ PROJECT }}-{{ APP_ENV }}
 
   template:
     metadata:
       labels:
-        app: {{ BRANCH }}-{{ PROJECT }}
-        branch: {{ BRANCH }}
+        app: {{ PROJECT }}-{{ APP_ENV }}
+        APP_ENV: {{ APP_ENV }}
         tag: {{ TAG }}
     spec:
+
       containers:
-        - name: {{ BRANCH }}-{{ PROJECT }}-web
-          image: {{ BRANCH }}-{{ PROJECT }}-web:{{ TAG }}
+        - name: {{ PROJECT }}-{{ APP_ENV }}-web
+          image: {{ PROJECT }}-{{ APP_ENV }}-web:{{ TAG }}
           env:
-            - name: APP_SECRET
+            - name: SYMFONY_DECRYPTION_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ BRANCH }}-{{ PROJECT }}-sf-secrets
-                  key: APP_SECRET
+                  name: {{ PROJECT }}-{{ APP_ENV }}-sf-secrets
+                  key: SYMFONY_DECRYPTION_SECRET
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ PROJECT }}-{{ APP_ENV }}-sf-secrets
+                  key: API_KEY
             - name: MAILER_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ BRANCH }}-{{ PROJECT }}-sf-secrets
+                  name: {{ PROJECT }}-{{ APP_ENV }}-sf-secrets
                   key: MAILER_PASSWORD
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ BRANCH }}-{{ PROJECT }}-sf-secrets
-                  key: DB_PASSWORD
           ports:
-            - name: {{ BRANCH }}-{{ PROJECT }}
-              hostIP: 127.0.0.1
-              hostPort: {{ APACHE_LISTEN_PORT }}
-              containerPort: {{ APACHE_LISTEN_PORT }}
+            - name: {{ PROJECT }}-{{ APP_ENV }}
+              containerPort: 80
           volumeMounts:
-            - name: {{ BRANCH }}-{{ PROJECT }}-var
-              mountPath: /var/www/var
+            - name: {{ PROJECT }}-{{ APP_ENV }}-log
+              mountPath: /var/www/log
             # Only for local development
-            - name: {{ BRANCH }}-{{ PROJECT }}-data-public
-              mountPath: /var/www/data-public
-            - name: {{ BRANCH }}-{{ PROJECT }}-data-private
-              mountPath: /var/www/data-private
-            - name: {{ BRANCH }}-{{ PROJECT }}-sf
+            - name: {{ PROJECT }}-{{ APP_ENV }}-local-storage
+              mountPath: /var/www/local-storage
+            - name: {{ PROJECT }}-{{ APP_ENV }}-sf
               mountPath: /var/www/sf
 
       volumes:
-        - name: {{ BRANCH }}-{{ PROJECT }}-var
+        - name: {{ PROJECT }}-{{ APP_ENV }}-log
           emptyDir: {}
-        - name: {{ BRANCH }}-{{ PROJECT }}-data-public
+        - name: {{ PROJECT }}-{{ APP_ENV }}-local-storage
           hostPath:
-            path: {{ HOST_DATA_PUBLIC_DIR }}
+            path: {{ HOST_DATA_LOCAL_STORAGE }}
             type: Directory
-        - name: {{ BRANCH }}-{{ PROJECT }}-data-private
-          hostPath:
-            path: {{ HOST_DATA_PRIVATE_DIR }}
-            type: Directory
-        - name: {{ BRANCH }}-{{ PROJECT }}-sf
+        - name: {{ PROJECT }}-{{ APP_ENV }}-sf
           hostPath:
             path: {{ HOST_SF_DIR }}
             type: Directory

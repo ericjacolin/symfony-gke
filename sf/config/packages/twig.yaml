@@ -1,0 +1,27 @@
+twig:
+    default_path: '%kernel.project_dir%/templates'
+    debug: '%kernel.debug%'
+    strict_variables: '%kernel.debug%'
+
+    # Twig helper services
+    globals:
+        # Services
+        some_utils:    '@App\Utils\SomeUtils'
+
+        # Parameters
+        cdn_url: "%cdn_url%"
+        cdn_url_from_cluster: "%cdn_url_from_cluster%"
+        site_url: "%router.request_context.scheme%://%router.request_context.host%"
+
+        # Asset cache busting
+        asset_v: "%asset_v%"
+
+    # Global form theming
+    form_themes:
+        - 'form/form_fields.html.twig'
+
+    # Deprecation - see https://github.com/symfony/symfony/blob/master/UPGRADE-4.4.md
+    # exception_controller: null
+
+    paths:
+        '%kernel.project_dir%/templates/email': email
