@@ -694,10 +694,10 @@ context before firing `kubectl apply` commands.
 kubectl config get-contexts
 # output:
 CURRENT   NAME                                             CLUSTER
-*         gke_{GCP_PROJECT}_{GCP_ZONE}_{GKE_CLUSTER}       gke_{GCP_PROJECT}_{GCP_ZONE}_{GKE_CLUSTER}
+*         gke_{GCP_PROJECT}_{GCP_REGION}_{GKE_CLUSTER}       gke_{GCP_PROJECT}_{GCP_REGION}_{GKE_CLUSTER}
           minikube                                         minikube
 # To switch to another context:
-kubectl config use-context gke_{GCP_PROJECT}_{GCP_ZONE}_{GKE_CLUSTER}
+kubectl config use-context gke_{GCP_PROJECT}_{GCP_REGION}_{GKE_CLUSTER}
 # or
 kubectl config use-context minikube
 ----
@@ -1115,7 +1115,7 @@ Deploy Kubernetes secrets. Here those are the same as for the local environment.
 ----
 cd your-secrets-dir
 # Switch to GKE context
-kubectl config use-context gke_{GCP_PROJECT}_{GCP_ZONE}_{GKE_CLUSTER}
+kubectl config use-context gke_{GCP_PROJECT}_{GCP_REGION}_{GKE_CLUSTER}
 kubectl apply -f secrets.oat.remote.yml
 kubectl apply -f secrets.prod.remote.yml
 ----
@@ -1142,7 +1142,7 @@ Deploy services manifests:
 ----
 cd {PROJECT}
 # Switch to GKE context
-kubectl config use-context gke_{GCP_PROJECT}_{GCP_ZONE}_{GKE_CLUSTER}
+kubectl config use-context gke_{GCP_PROJECT}_{GCP_REGION}_{GKE_CLUSTER}
 # Deploy services (OAT on test.)
 php vendor/bin/dep --file=conf/deployer/deploy.php \
     --hosts=remote gen-service -o APP_ENV=oat
