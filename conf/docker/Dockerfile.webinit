@@ -5,6 +5,10 @@ ARG DEBIAN_FRONTEND=noninteractive
 # Git credentials
 ARG GITHUB_SSH_KEY
 ENV GITHUB_SSH_KEY $GITHUB_SSH_KEY
+ARG GITHUB_ACCOUNT
+ENV GITHUB_ACCOUNT $GITHUB_ACCOUNT
+ARG GITHUB_REPO
+ENV GITHUB_REPO $GITHUB_REPO
 # Application build parameters
 ARG TAG
 ENV TAG $TAG
@@ -31,21 +35,21 @@ RUN apt-get update \
 
 WORKDIR /root
 
-# Clone the Github repo (ADAPT)
+# Clone the Github repo
 COPY infra/ssh_config .ssh/config
 RUN chmod 600 .ssh/config
 RUN echo "${GITHUB_SSH_KEY}" > .ssh/id_rsa
 RUN chmod 400 .ssh/id_rsa
-RUN git clone git@github.com:<git account>/<git repo>.git
+RUN git clone git@github.com:${GITHUB_ACCOUNT}/${GITHUB_REPO}.git
 
 # Fetch the version tag to build
-WORKDIR /root/project
+WORKDIR /root/${GITHUB_REPO}
 RUN git fetch --all --tags --prune \
     && git checkout tags/${TAG}
 
 # Copy Symfony application files
 RUN mkdir -p /var/www/sf
-WORKDIR /root/project/sf
+WORKDIR /root/${GITHUB_REPO}/sf
 RUN cp -r -t /var/www/sf \
     bin \
     config \
@@ -73,4 +77,5 @@ RUN mkdir -p /var/www/cache \
         API_KEY="dummy" \
         APP_SECRET="dummy" \
         MAILER_PASSWORD="dummy" \
+        EMAIL_FROM="dummy@dummy.com" \
         /var/www/sf/bin/console cache:warmup --env=${APP_ENV}

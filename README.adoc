@@ -946,6 +946,14 @@ gcloud compute scp \
 mysql -u root -p -h 10.1.2.3 {PROJECT}_dev < /tmp/{PROJECT}_dev.sql
 ----
 
+==== Artifact Registry
+
+The Container Registry is deprecated. Use the Artifact Registry instead.
+
+* In the Console > Artifact Registry, create a repo named `{GCP_PROJECT}`
+* In Cloud Shell run `gcloud auth configure-docker {GCP_REGION}-docker.pkg.dev`
+* Assign role "Artifact Registry Writer" to your service account
+
 === GKE
 
 ==== Create the cluster

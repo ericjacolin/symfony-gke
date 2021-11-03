@@ -28,7 +28,7 @@
  * ----
  * Local: execute in the local shell: (usually done once, at the beginning)
  * $ dep --file=conf/deployer/deploy.php --hosts=localhost deploy-local -o APP_ENV=dev -o TAG=current
- * Remote: execute in the Cloud shell: (LAST argument is optional, enables reusing build cache on gcr.io)
+ * Remote: execute in the Cloud shell: (LAST argument is optional, enables reusing build cache on Artifact Registry)
  * $ dep --file=conf/deployer/deploy.php --hosts=remote deploy-remote -o APP_ENV=oat -o TAG=0.2 -o LAST=0.1
  */
 
@@ -44,8 +44,11 @@ inventory('conf/deployer/hosts.yml');
 // Global project environment variables
 set('COMPOSE_PROJECT_NAME', 'myproject');
 set('GCP_PROJECT_ID', 'myproject-123456');
+set('GCP_REGION', 'us-central1');
 set('ROOT_DIR', __DIR__.'/../..');
 set('CLOUD_SHELL_USER', 'my_user');
+set('GITHUB_ACCOUNT', 'my_github_account');
+set('GITHUB_REPO', 'myproject');
 
 /**
  *    ------------------------------
@@ -167,6 +170,8 @@ task(
                     --build-arg HOST_ENV={{ HOST_ENV }} \
                     --build-arg TAG={{ TAG }} \
                     --build-arg GITHUB_SSH_KEY=\"{{ GITHUB_SSH_KEY }}\" \
+                    --build-arg GITHUB_ACCOUNT=\"{{ GITHUB_ACCOUNT }}\" \
+                    --build-arg GITHUB_REPO=\"{{ GITHUB_REPO }}\" \
                     .
             ", ['timeout' => null, 'tty' => true]
         );
@@ -240,10 +245,12 @@ host('remote')
     ->set('GITHUB_SSH_KEY', file_get_contents('/home/'.get('CLOUD_SHELL_USER').'/.ssh/id_rsa'))
     ->set('CACHE_FROM_WEB', function () {
         if (get('LAST')) {
-            // --cache-from gcr.io/{{ GCP_PROJECT_ID }}/{{ COMPOSE_PROJECT_NAME }}-{{ APP_ENV }}-web:{{ TAG }}
+            // --cache-from {{ GCP_REGION }}-docker.pkg.dev/{{ GCP_PROJECT_ID }}/{{ PROJECT }}/{{ COMPOSE_PROJECT_NAME }}-{{ APP_ENV }}-web:{{ TAG }}
             return sprintf(
-                '--cache-from gcr.io/%s/%s-%s-web:%s',
+                '--cache-from %s-docker.pkg.dev/%s/%s-%s-web:%s',
+                get('GCP_REGION'),
                 get('GCP_PROJECT_ID'),
+                get('PROJECT'),
                 get('COMPOSE_PROJECT_NAME'),
                 get('APP_ENV'),
                 get('LAST')
@@ -254,10 +261,12 @@ host('remote')
     })
     ->set('CACHE_FROM_WEBINIT', function () {
         if (get('LAST')) {
-            // --cache-from gcr.io/{{ GCP_PROJECT_ID }}/{{ COMPOSE_PROJECT_NAME }}-{{ APP_ENV }}-webinit:{{ TAG }}
+            // --cache-from {{ GCP_REGION }}-docker.pkg.dev/{{ GCP_PROJECT_ID }}/{{ PROJECT }}/{{ COMPOSE_PROJECT_NAME }}-{{ APP_ENV }}-webinit:{{ TAG }}
             return sprintf(
-                '--cache-from gcr.io/%s/%s-%s-webinit:%s',
+                '--cache-from %s-docker.pkg.dev/%s/%s-%s-webinit:%s',
+                get('GCP_REGION'),
                 get('GCP_PROJECT_ID'),
+                get('PROJECT'),
                 get('COMPOSE_PROJECT_NAME'),
                 get('APP_ENV'),
                 get('LAST')
@@ -289,31 +298,31 @@ task(
 );
 
 /**
- * Tag local image for the GCR,
- * Push images to GCR docker repository
+ * Tag local image for the Artifact Registry,
+ * Push images to Artifact Registry
  */
 task(
     'remote:push-image', function () {
         run(
             "
                 docker tag {{ COMPOSE_PROJECT_NAME }}-{{ APP_ENV }}-webinit:{{ TAG }} \
-                    gcr.io/{{ GCP_PROJECT_ID }}/{{ COMPOSE_PROJECT_NAME }}-{{ APP_ENV }}-webinit:{{ TAG }}
+                    {{ GCP_REGION }}-docker.pkg.dev/{{ GCP_PROJECT_ID }}/{{ PROJECT }}/{{ COMPOSE_PROJECT_NAME }}-{{ APP_ENV }}-webinit:{{ TAG }}
             ", ['timeout' => null, 'tty' => true]
         );
         run(
             "
-                docker push gcr.io/{{ GCP_PROJECT_ID }}/{{ COMPOSE_PROJECT_NAME }}-{{ APP_ENV }}-webinit:{{ TAG }}
+                docker push {{ GCP_REGION }}-docker.pkg.dev/{{ GCP_PROJECT_ID }}/{{ PROJECT }}/{{ COMPOSE_PROJECT_NAME }}-{{ APP_ENV }}-webinit:{{ TAG }}
             ", ['timeout' => null, 'tty' => true]
         );
         run(
             "
                 docker tag {{ COMPOSE_PROJECT_NAME }}-{{ APP_ENV }}-web:{{ TAG }} \
-                    gcr.io/{{ GCP_PROJECT_ID }}/{{ COMPOSE_PROJECT_NAME }}-{{ APP_ENV }}-web:{{ TAG }}
+                    {{ GCP_REGION }}-docker.pkg.dev/{{ GCP_PROJECT_ID }}/{{ PROJECT }}/{{ COMPOSE_PROJECT_NAME }}-{{ APP_ENV }}-web:{{ TAG }}
             ", ['timeout' => null, 'tty' => true]
         );
         run(
             "
-                docker push gcr.io/{{ GCP_PROJECT_ID }}/{{ COMPOSE_PROJECT_NAME }}-{{ APP_ENV }}-web:{{ TAG }}
+                docker push {{ GCP_REGION }}-docker.pkg.dev/{{ GCP_PROJECT_ID }}/{{ PROJECT }}/{{ COMPOSE_PROJECT_NAME }}-{{ APP_ENV }}-web:{{ TAG }}
             ", ['timeout' => null, 'tty' => true]
         );
     }

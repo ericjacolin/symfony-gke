@@ -22,7 +22,7 @@ spec:
 
       initContainers:
         - name: {{ PROJECT }}-{{ APP_ENV }}-webinit
-          image: gcr.io/{{ GCP_PROJECT_ID }}/{{ PROJECT }}-{{ APP_ENV }}-webinit:{{ TAG }}
+          image: {{ GCP_REGION }}-docker.pkg.dev/{{ GCP_PROJECT_ID }}/{{ PROJECT }}/{{ PROJECT }}-{{ APP_ENV }}-webinit:{{ TAG }}
           command:
             - "/bin/sh"
             - "-c"
@@ -41,7 +41,7 @@ spec:
 
       containers:
         - name: {{ PROJECT }}-{{ APP_ENV }}-web
-          image: gcr.io/{{ GCP_PROJECT_ID }}/{{ PROJECT }}-{{ APP_ENV }}-web:{{ TAG }}
+          image: {{ GCP_REGION }}-docker.pkg.dev/{{ GCP_PROJECT_ID }}/{{ PROJECT }}/{{ PROJECT }}-{{ APP_ENV }}-web:{{ TAG }}
           env:
             - name: SYMFONY_DECRYPTION_SECRET
               valueFrom:

@@ -17,7 +17,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: k8s-cronjob
-              image: gcr.io/{{ GCP_PROJECT_ID }}/k8s-cronjob:current
+              image: us-central1-docker.pkg.dev/{{ GCP_PROJECT_ID }}/{{ PROJECT }}/k8s-cronjob:current
               env:
                 - name: API_KEY
                   valueFrom:
@@ -53,7 +53,7 @@ spec:
 #           restartPolicy: OnFailure
 #           containers:
 #             - name: k8s-cronjob
-#               image: gcr.io/{{ GCP_PROJECT_ID }}/k8s-cronjob:current
+#               image: us-central1-docker.pkg.dev/{{ GCP_PROJECT_ID }}/{{ PROJECT }}/k8s-cronjob:current
 #               env:
 #                 - name: API_KEY
 #                   valueFrom:
