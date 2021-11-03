@@ -6,6 +6,7 @@ RUN apt-get update \
     # generic libraries
     && apt-get install -y \
         curl \
+        libonig-dev \
         libssl-dev \
         libxml2-dev \
         libyaml-dev \
@@ -16,6 +17,7 @@ RUN apt-get update \
         exif \
         gettext \
         intl \
+        mbstring \
         pcntl \
         pdo_mysql \
     # APCu

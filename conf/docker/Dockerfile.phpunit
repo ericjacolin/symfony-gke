@@ -6,6 +6,7 @@ RUN apt-get update \
     # generic libraries
     && apt-get install -y \
         curl \
+        libonig-dev \
         libssl-dev \
         libxml2-dev \
         libyaml-dev \
@@ -15,6 +16,7 @@ RUN apt-get update \
         exif \
         gettext \
         intl \
+        mbstring \
         pdo_mysql \
     # APCu
     && echo '' | pecl install apcu-5.1.18 \

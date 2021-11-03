@@ -28,6 +28,7 @@ RUN apt-get update \
         php-apcu \
         php-cli \
         php-curl \
+        php-mbstring \
         php-xml \
         php-zip \
         unzip \
